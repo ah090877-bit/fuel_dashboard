@@ -1,4 +1,3 @@
-// 🚨 여기에 본인의 구글 웹앱 URL( /exec 로 끝나는 주소 )을 꼭 넣어주세요!
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF3a9lj-9LjmXp1ZTk-yL97znfSniJ1_kixxVuDl0Hjar0/exec';
 
 const app = {
@@ -94,13 +93,13 @@ const app = {
     applyRoleRestrictions: (role) => {
         const mgrLocks = document.querySelectorAll('.btn-mgr-lock');
         const btnManageComp = document.getElementById('btnManageCompany');
+        
+        // ⭐️ 수정된 에러 방어 로직 (버튼이 없어도 터지지 않음)
+        mgrLocks.forEach(b => b.removeAttribute('disabled'));
+
         if (role === 'manager') {
-            document.getElementById('btnSetFuelRate').removeAttribute('disabled');
-            mgrLocks.forEach(b => b.removeAttribute('disabled'));
             if(btnManageComp) btnManageComp.classList.add('d-none'); 
         } else {
-            document.getElementById('btnSetFuelRate').removeAttribute('disabled');
-            mgrLocks.forEach(b => b.removeAttribute('disabled'));
             if(btnManageComp) btnManageComp.classList.remove('d-none'); 
         }
     },
@@ -295,9 +294,7 @@ const app = {
             app.rawDb = data;
             app.populateAdminCompanyFilter();
             app.refreshAdminViews();
-            
             app.resetDailySearch();
-            
             const currentYearMonth = new Date().toISOString().substring(0, 7);
             document.getElementById('searchMonthlyMonth').value = currentYearMonth;
             app.applyMonthlySearch();
@@ -684,7 +681,6 @@ const app = {
         if(res) app.loadAdminDashboardData();
     },
 
-    // ⭐️ 3번 요구사항: 화주사 마스터 예쁜 UI 연동
     openCompanyModal: () => {
         app.renderMasterCompanies();
         new bootstrap.Modal(document.getElementById('mdlCompany')).show();
