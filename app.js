@@ -1,3 +1,4 @@
+// 🚨 여기에 본인의 구글 웹앱 URL( /exec 로 끝나는 주소 )을 꼭 넣어주세요!
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF3a9lj-9LjmXp1ZTk-yL97znfSniJ1_kixxVuDl0Hjar0/exec';
 
 const app = {
@@ -20,7 +21,7 @@ const app = {
         document.getElementById('mileageForm')?.addEventListener('submit', app.handleMileageSubmit);
         document.getElementById('frmDriver')?.addEventListener('submit', app.handleDriverFormSubmit);
         document.getElementById('frmFuelRate')?.addEventListener('submit', app.handleFuelRateSubmit);
-        document.getElementById('frmEditDaily')?.addEventListener('submit', app.handleEditDailySubmit); // ⭐️ 일별 상세 수정 이벤트
+        document.getElementById('frmEditDaily')?.addEventListener('submit', app.handleEditDailySubmit);
         
         document.getElementById('driverMonthFilter')?.addEventListener('change', app.renderDriverRecords);
         document.getElementById('unsubmittedDateFilter')?.addEventListener('change', app.renderUnsubmittedTable);
@@ -194,7 +195,6 @@ const app = {
         const compSelect = document.getElementById('inputCompany');
         compSelect.innerHTML = '';
         
-        // ⭐️ 로그인 시 가져온 활성 화주사(activeCompanies) 목록에 포함된 것만 필터링하여 기입 가능
         const activeComps = app.user.activeCompanies || [];
         const myCompanies = (app.user.company || "").split(',').map(c => c.trim()).filter(c => c && activeComps.includes(c));
         
@@ -295,7 +295,9 @@ const app = {
             app.rawDb = data;
             app.populateAdminCompanyFilter();
             app.refreshAdminViews();
+            
             app.resetDailySearch();
+            
             const currentYearMonth = new Date().toISOString().substring(0, 7);
             document.getElementById('searchMonthlyMonth').value = currentYearMonth;
             app.applyMonthlySearch();
@@ -309,6 +311,7 @@ const app = {
         const masterCompObj = app.rawDb.masterCompanies || [];
         const companies = new Set(masterCompObj.map(c => c.name));
         app.rawDb.drivers.forEach(d => { if(d.company) d.company.split(',').forEach(c => companies.add(c.trim())); });
+        app.rawDb.mileages.forEach(m => { if(m.company) m.company.split(',').forEach(c => companies.add(c.trim())); });
         
         if (app.user.role === 'admin') {
             badgeEl.classList.add('d-none');
@@ -319,6 +322,7 @@ const app = {
             Array.from(companies).filter(c=>c).sort().forEach(c => {
                 selectEl.innerHTML += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`;
             });
+            
             selectEl.value = Array.from(companies).includes(currentVal) ? currentVal : 'ALL';
             app.currentAdminCompanyFilter = selectEl.value;
         } else {
@@ -338,7 +342,7 @@ const app = {
             } else {
                 searchCompEl.innerHTML = `<option value="${app.escapeXSS(app.user.company)}">${app.escapeXSS(app.user.company)}</option>`;
                 searchCompEl.value = app.user.company;
-                searchCompEl.setAttribute('disabled', 'true');
+                searchCompEl.setAttribute('disabled', 'true'); 
             }
         }
     },
@@ -461,7 +465,6 @@ const app = {
         compInput.innerHTML = '';
         
         const masterCompObj = app.rawDb.masterCompanies || [];
-        // 기사 등록 시에는 운영 중단 여부와 무관하게 다 등록할 수 있게 하거나, active만 하거나 선택 가능. 여기선 전체 노출
         if(app.user.role === 'manager') {
             compInput.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`;
             compInput.setAttribute('disabled', 'true');
@@ -554,12 +557,11 @@ const app = {
         if(!confirm(`${name} 기사님의 비밀번호를 0000 으로 초기화합니다.`)) return;
         const res = await app.fetchAPI({ action: 'resetPassword', phone, default_hash: '0000' });
         if(res) {
-            alert(`초기화 완료`);
+            alert(`초기화 완료 (비밀번호: 0000)`);
             app.loadAdminDashboardData();
         }
     },
 
-    // ⭐️ 1번 요구사항: 일별 기록 수정 / 삭제 프로세스
     openEditDailyModal: (dateStr, phone, company, distance, name) => {
         document.getElementById('eDailyDate').value = dateStr;
         document.getElementById('eDailyPhone').value = phone;
@@ -602,6 +604,7 @@ const app = {
     openFuelRateModal: () => {
         const currentYearMonth = new Date().toISOString().substring(0, 7);
         document.getElementById('mFuelRateMonth').value = currentYearMonth;
+        
         const compSelect = document.getElementById('mFuelRateCompany');
         compSelect.innerHTML = '<option value="">모든 화주사 공통 단가 (기본)</option>';
         if (app.user.role === 'admin') {
@@ -612,6 +615,7 @@ const app = {
         } else {
              compSelect.innerHTML = `<option value="${app.escapeXSS(app.user.company)}">${app.escapeXSS(app.user.company)}</option>`;
         }
+        
         app.syncFuelRateValue();
         new bootstrap.Modal(document.getElementById('mdlFuelRate')).show();
     },
@@ -634,6 +638,7 @@ const app = {
         const selectedMonth = document.getElementById('mFuelRateMonth').value; 
         const selectedCompany = document.getElementById('mFuelRateCompany').value; 
         const val = parseInt(document.getElementById('mFuelRateVal').value, 10);
+        
         if (!selectedMonth) return;
         if (isNaN(val) || val <= 0) return;
 
@@ -648,14 +653,18 @@ const app = {
     renderFuelRateTable: () => {
         const tbody = document.getElementById('tblFuelRateBody');
         tbody.innerHTML = '';
+        
         const rates = app.rawDb.fuelRatesList || [];
         if(rates.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">등록된 단가 정보가 없습니다.</td></tr>';
             return;
         }
+
         rates.sort((a,b) => b.month.localeCompare(a.month)); 
+        
         rates.forEach(r => {
             if (app.user.role === 'manager' && r.company !== app.user.company && r.company !== "") return;
+            
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="fw-bold">${r.month}</td>
@@ -675,7 +684,7 @@ const app = {
         if(res) app.loadAdminDashboardData();
     },
 
-    // ⭐️ 2번 요구사항: 화주사 마스터 수정 및 상태 변경 연동
+    // ⭐️ 3번 요구사항: 화주사 마스터 예쁜 UI 연동
     openCompanyModal: () => {
         app.renderMasterCompanies();
         new bootstrap.Modal(document.getElementById('mdlCompany')).show();
@@ -686,17 +695,25 @@ const app = {
         ul.innerHTML = '';
         const comps = app.rawDb.masterCompanies || [];
         if(comps.length === 0) {
-            ul.innerHTML = '<li class="list-group-item text-muted text-center small">등록된 화주사가 없습니다.</li>';
+            ul.innerHTML = '<li class="list-group-item text-muted text-center small bg-light border-0 rounded-3 py-3">등록된 화주사가 없습니다.</li>';
         } else {
             comps.sort((a,b)=>a.name.localeCompare(b.name)).forEach(c => {
-                const statusBadge = c.status === 'active' ? '<span class="badge bg-success">운영중</span>' : '<span class="badge bg-danger">중단됨</span>';
+                const statusBadge = c.status === 'active' 
+                    ? '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1 small">운영중</span>' 
+                    : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2 py-1 small">중단됨</span>';
+                
                 ul.innerHTML += `
-                    <li class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="fw-bold text-dark">${app.escapeXSS(c.name)} ${statusBadge}</span>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-primary" onclick="app.editMasterCompanyPrompt('${c.name}')">수정</button>
-                                <button class="btn btn-outline-warning" onclick="app.toggleCompanyStatusProcess('${c.name}', '${c.status}')">상태변경</button>
+                    <li class="list-group-item bg-light border-0 rounded-3 p-3">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fw-bold text-dark fs-6">${app.escapeXSS(c.name)}</span>
+                                ${statusBadge}
+                            </div>
+                            <div class="btn-group shadow-sm">
+                                <button class="btn btn-sm btn-white border text-primary fw-bold" onclick="app.editMasterCompanyPrompt('${c.name}')"><i class="bi bi-pencil-square"></i> 이름 수정</button>
+                                <button class="btn btn-sm btn-white border ${c.status === 'active' ? 'text-danger' : 'text-success'} fw-bold" onclick="app.toggleCompanyStatusProcess('${c.name}', '${c.status}')">
+                                    <i class="bi ${c.status === 'active' ? 'bi-pause-circle' : 'bi-play-circle'}"></i> 상태 변경
+                                </button>
                             </div>
                         </div>
                     </li>
