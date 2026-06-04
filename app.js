@@ -154,7 +154,6 @@ const app = {
         const phone = document.getElementById('loginPhone').value.trim();
         const pw = document.getElementById('loginPw').value.trim();
         const hashedPassword = await app.hashPassword(pw);
-        // ⭐️ 어떤 화면에서 로그인 시도했는지(기사/관리자)를 필수로 전송
         const data = await app.fetchAPI({ action: 'login', phone, password_hash: hashedPassword, role: app.loginTargetRole });
         app.showLoading(false);
 
@@ -193,7 +192,6 @@ const app = {
         app.showLoading(true);
         const hashedPassword = await app.hashPassword(newPw);
         
-        // ⭐️ 현재 유저의 역할(Role)도 함께 보내서 정확한 열(Row)의 암호를 변경
         const targetData = app.tempLoginData ? app.tempLoginData : app.user;
         const data = await app.fetchAPI({ action: 'changePassword', phone: targetData.phone, new_password_hash: hashedPassword, role: targetData.role });
         app.showLoading(false);
@@ -422,6 +420,7 @@ const app = {
         app.showLoading(false);
         if (data) {
             app.rawDb = data; 
+            app.setupAdminUI(); // ⭐️ 환영 메시지 및 권한에 따른 UI 제어 호출
             app.populateAdminCompanyFilter(); 
             app.refreshAdminViews();
             document.getElementById('searchDailyMonth').value = app.getSafeTodayString().substring(0, 7);
@@ -429,6 +428,23 @@ const app = {
             document.getElementById('searchMonthlyMonth').value = app.getSafeTodayString().substring(0, 7);
             app.applyDailySearch(); 
             app.applyReceiptSearch();
+        }
+    },
+
+    // ⭐️ 3. 직관적인 환영 메시지 및 화주사 매니저 UI 버튼 가리기 
+    setupAdminUI: () => {
+        const badgeEl = document.getElementById('adminGreetingBadge');
+        if(badgeEl) {
+            if(app.user.role === 'admin') {
+                badgeEl.innerHTML = `<span class="badge bg-primary px-3 py-2 rounded-pill shadow-sm"><i class="bi bi-star-fill text-warning"></i> 최고관리자</span> <span class="fs-5 fw-bold ms-2 text-dark">${app.escapeXSS(app.user.name)}</span><span class="fs-6 text-muted">님, 반갑습니다!</span>`;
+            } else {
+                badgeEl.innerHTML = `<span class="badge bg-info text-dark px-3 py-2 rounded-pill shadow-sm"><i class="bi bi-building"></i> ${app.escapeXSS(app.user.company)}</span> <span class="fs-5 fw-bold ms-2 text-dark">${app.escapeXSS(app.user.name)}</span><span class="fs-6 text-muted"> 관리자님, 반갑습니다!</span>`;
+            }
+        }
+        
+        const btnManageCompany = document.getElementById('btnManageCompany');
+        if (app.user.role === 'manager' && btnManageCompany) {
+            btnManageCompany.classList.add('d-none');
         }
     },
 
@@ -563,12 +579,35 @@ const app = {
         app.loadAdminDashboardData();
     },
 
-    openFuelRateModal: () => {
+    populateFuelRateCompanySelect: () => {
         const compSelect = document.getElementById('mFuelRateCompany');
-        compSelect.innerHTML = '<option value="">전체 공통 (기본값)</option>';
-        (app.rawDb.masterCompanies || []).forEach(c => compSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+        compSelect.innerHTML = '';
+        if(app.user.role === 'admin') {
+            compSelect.innerHTML += '<option value="">전체 공통 (기본값)</option>';
+            (app.rawDb.masterCompanies || []).forEach(c => compSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+        } else {
+            compSelect.innerHTML += `<option value="${app.user.company}">${app.user.company}</option>`;
+        }
+    },
+
+    openFuelRateModal: () => {
+        app.populateFuelRateCompanySelect();
         document.getElementById('mFuelRateMonth').value = app.getSafeTodayString().substring(0, 7);
+        document.getElementById('mFuelRateMonth').removeAttribute('readonly');
         document.getElementById('mFuelRateVal').value = 200;
+        new bootstrap.Modal(document.getElementById('mdlFuelRate')).show();
+    },
+
+    // ⭐️ 2. 기존 단가 수정 폼 연동
+    openEditFuelRateModal: (month, company, rate) => {
+        app.populateFuelRateCompanySelect();
+        document.getElementById('mFuelRateMonth').value = month;
+        document.getElementById('mFuelRateCompany').value = company || '';
+        document.getElementById('mFuelRateVal').value = rate;
+        
+        // 덮어쓰기 형태이므로, 월 변경 방지
+        document.getElementById('mFuelRateMonth').setAttribute('readonly', true);
+        
         new bootstrap.Modal(document.getElementById('mdlFuelRate')).show();
     },
 
@@ -583,16 +622,28 @@ const app = {
         app.loadAdminDashboardData();
     },
 
+    // ⭐️ 1, 2. 단가 렌더링 시 권한 식별 및 수정 버튼 추가
     renderFuelRateTable: () => {
         const tbody = document.getElementById('tblFuelRateBody');
         if(!tbody) return;
         tbody.innerHTML = '';
         (app.rawDb.fuelRatesList || []).forEach(r => {
+            const isGlobal = !r.company;
+            const canEdit = app.user.role === 'admin' || (app.user.role === 'manager' && app.user.company === r.company);
+            
+            let actionBtns = '-';
+            if (canEdit) {
+                actionBtns = `
+                    <button class="btn btn-sm btn-outline-primary py-0 px-2 me-1" onclick="app.openEditFuelRateModal('${r.month}', '${r.company || ''}', ${r.rate})">수정</button>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="app.deleteFuelRateProcess('${r.month}', '${r.company || ''}')">삭제</button>
+                `;
+            }
+
             tbody.innerHTML += `<tr>
                 <td>${r.month}</td>
-                <td><span class="badge bg-secondary">${r.company || '전체 공통'}</span></td>
+                <td><span class="badge bg-secondary">${r.company || '전체 공통 (기본값)'}</span></td>
                 <td class="fw-bold text-danger">${r.rate}원</td>
-                <td class="text-center"><button class="btn btn-sm btn-outline-danger" onclick="app.deleteFuelRateProcess('${r.month}', '${r.company}')">삭제</button></td>
+                <td class="text-center">${actionBtns}</td>
             </tr>`;
         });
     },
@@ -760,7 +811,6 @@ const app = {
         new bootstrap.Modal(document.getElementById('mdlDriver')).show();
     },
 
-    // ⭐️ 기사 등록 시 중복 여부 확인 및 알림창 띄우기 로직 추가
     handleDriverFormSubmit: async (e) => {
         e.preventDefault();
         const originPhone = document.getElementById('hdnEditOriginPhone').value;
