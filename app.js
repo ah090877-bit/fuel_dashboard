@@ -1,4 +1,4 @@
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF3a9lj-9LjmXp1ZTk-yL97znfSniJ1_kixxVuDl0Hjar0/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzL5Tbe1D0qWnN9-W6HwR-E9-T-v_8O26K6P_YvFmB0R-qUe0M7Z87pPhPzWwUf3N_w/exec';
 
 const app = {
     user: JSON.parse(localStorage.getItem('fuelUser')) || null,
@@ -123,6 +123,33 @@ const app = {
         return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     },
 
+    // ⭐️ 스마트폰 고용량 사진 압축 엔진 (용량 초과 방지)
+    compressImage: async (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1000; // 가로 1000픽셀로 줄임 (화질유지, 용량 1/10)
+                    let width = img.width;
+                    let height = img.height;
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]); 
+                }
+            };
+        });
+    },
+
     fetchAPI: async (payload) => {
         app.showLoading(true);
         try {
@@ -186,7 +213,7 @@ const app = {
     },
 
     initDriverView: () => {
-        document.getElementById('inputDate').value = new Date().toLocaleDateString('sv-SE');
+        app.cancelDriverEdit(); // 화면 진입 시 수정모드 초기화
         document.getElementById('driverGreeting').innerHTML = `이름: <b class="text-primary">${app.escapeXSS(app.user.name)}</b> 기사님`;
         document.getElementById('driverCarBadge').innerText = app.escapeXSS(app.user.car_number);
 
@@ -209,6 +236,7 @@ const app = {
         app.renderDriverRecords();
     },
 
+    // ⭐️ 기사님 상세 기록 렌더링 (보기 버튼 및 수정 버튼 추가)
     renderDriverRecords: () => {
         const selectedMonth = document.getElementById('driverMonthFilter').value;
         const records = app.user.driverRecords || [];
@@ -230,16 +258,23 @@ const app = {
         tbody.innerHTML = '';
 
         if(validRecords.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted small">해당 월의 운행 기록이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted small py-3">해당 월의 운행 기록이 없습니다.</td></tr>';
         } else {
             validRecords.sort((a,b) => new Date(b.date) - new Date(a.date));
             validRecords.forEach(r => {
+                const rowDateStr = new Date(r.date).toLocaleDateString('sv-SE');
+                const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0"><i class="bi bi-image"></i> 보기</a>` : `<span class="text-muted small">없음</span>`;
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td class="small">${new Date(r.date).toLocaleDateString('ko-KR', {month:'2-digit', day:'2-digit'})}</td>
                     <td class="small text-muted">${app.escapeXSS(r.company)}</td>
                     <td class="fw-bold text-dark">${Number(r.distance).toLocaleString()} km</td>
                     <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
+                    <td class="text-center">${evidenceBtn}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary py-0 px-2 rounded-1" onclick="app.setupDriverEdit('${rowDateStr}', '${app.escapeXSS(r.company)}', '${r.distance}')">수정</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -250,50 +285,89 @@ const app = {
         document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
     },
 
-    // ⭐️ 파일 업로드 처리와 함께 서버에 데이터 전송
+    // ⭐️ 기사 본인 데이터 수정 세팅 기능
+    setupDriverEdit: (date, company, distance) => {
+        document.getElementById('inputDate').value = date;
+        document.getElementById('inputCompany').value = company;
+        document.getElementById('inputDistance').value = distance;
+        
+        document.getElementById('hdnDriverEditMode').value = "true";
+        document.getElementById('driverFormTitle').innerHTML = '<i class="bi bi-pencil-fill"></i> 운행 기록 수정 모드';
+        
+        document.getElementById('lblEvidence').innerHTML = '<i class="bi bi-camera"></i> 계기판/영수증 증빙 (변경시에만 첨부)';
+        document.getElementById('lblEvidence').classList.replace('text-danger', 'text-primary');
+        document.getElementById('txtEvidenceHelp').innerText = '기존 사진을 유지하려면 파일을 첨부하지 마세요.';
+        
+        document.getElementById('btnSubmitMileage').innerHTML = '<i class="bi bi-check-circle"></i> 수정사항 저장';
+        document.getElementById('btnSubmitMileage').classList.replace('w-100', 'w-75');
+        document.getElementById('btnCancelEdit').classList.remove('d-none');
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    cancelDriverEdit: () => {
+        document.getElementById('inputDate').value = new Date().toLocaleDateString('sv-SE');
+        document.getElementById('inputDistance').value = '';
+        document.getElementById('inputEvidence').value = '';
+        
+        document.getElementById('hdnDriverEditMode').value = "false";
+        document.getElementById('driverFormTitle').innerHTML = '<i class="bi bi-pencil-square"></i> 주행거리 기록 및 증빙';
+        
+        document.getElementById('lblEvidence').innerHTML = '<i class="bi bi-camera-fill"></i> 계기판/영수증 증빙 (필수)';
+        document.getElementById('lblEvidence').classList.replace('text-primary', 'text-danger');
+        document.getElementById('txtEvidenceHelp').innerText = '최초 등록 시 사진 첨부는 필수입니다.';
+
+        document.getElementById('btnSubmitMileage').innerHTML = '<i class="bi bi-cloud-arrow-up"></i> 등록하기';
+        document.getElementById('btnSubmitMileage').classList.replace('w-75', 'w-100');
+        document.getElementById('btnCancelEdit').classList.add('d-none');
+    },
+
+    // ⭐️ 기사용 운행기록 제출 (사진 압축 및 필수 입력 검증)
     handleMileageSubmit: async (e) => {
         e.preventDefault();
         const date = document.getElementById('inputDate').value;
         const distance = parseInt(document.getElementById('inputDistance').value, 10);
         const company = document.getElementById('inputCompany').value;
         const fileInput = document.getElementById('inputEvidence');
+        const isEditMode = document.getElementById('hdnDriverEditMode').value === "true";
 
         if (!company) return alert('기입 가능한 소속 화주사가 없습니다. 관리자에게 문의하세요.');
         if (isNaN(distance) || distance <= 0) return alert('주행거리를 올바르게 입력하세요.');
 
+        // ⭐️ 사진 첨부 필수 검증 (새로운 등록일 때만)
+        if (!isEditMode && fileInput.files.length === 0) {
+            return alert('계기판이나 영수증 등 증빙 사진을 반드시 첨부해 주셔야 등록이 가능합니다.');
+        }
+
         const payload = {
             action: 'saveMileage', date, distance, phone: app.user.phone,
             name: app.user.name, car_number: app.user.car_number,
-            company: company, isUpdate: false, edited_by: app.user.name,
+            company: company, isUpdate: isEditMode, edited_by: app.user.name,
             fileBase64: null, mimeType: null
         };
 
-        // 파일이 선택된 경우 Base64 인코딩 진행
         if (fileInput.files.length > 0) {
             const file = fileInput.files[0];
-            payload.mimeType = file.type;
-            app.showLoading(true); // 파일 읽는 동안 로딩바
-            payload.fileBase64 = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result.split(',')[1]); 
-                reader.readAsDataURL(file);
-            });
+            payload.mimeType = "image/jpeg"; // 압축 후엔 무조건 jpeg
+            app.showLoading(true); 
+            // ⭐️ 용량 초과 방지를 위한 스마트폰 고화질 압축 실행
+            payload.fileBase64 = await app.compressImage(file);
             app.showLoading(false);
         }
 
         let res = await app.fetchAPI(payload);
         
+        // 만약 새로 등록인 줄 알았는데 이미 데이터가 있는 경우 (날짜 중복)
         if (res === null) {
-            if (confirm('해당 날짜, 해당 화주사에 이미 기록이 존재합니다.\n새로운 거리(및 증빙)로 덮어쓰기 하시겠습니까?')) {
+            if (confirm('해당 날짜, 해당 화주사에 이미 기록이 존재합니다.\n입력하신 거리(및 증빙)로 덮어쓰기 수정하시겠습니까?')) {
                 payload.isUpdate = true;
                 res = await app.fetchAPI(payload);
             } else { return; }
         }
 
         if (res) {
-            alert('주행기록(증빙 포함)이 성공적으로 저장되었습니다.');
-            document.getElementById('inputDistance').value = '';
-            fileInput.value = ''; // 파일 필드 초기화
+            alert('주행기록 및 증빙자료가 성공적으로 저장되었습니다.');
+            app.cancelDriverEdit(); 
             
             const updatedRecords = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
             if (updatedRecords) {
@@ -775,7 +849,6 @@ const app = {
         app.applyDailySearch();
     },
 
-    // ⭐️ 일별 상세 테이블에 증빙자료(링크) 추가 렌더링
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
         const fStart = document.getElementById('searchDailyStart').value;
@@ -806,9 +879,8 @@ const app = {
 
         app.filteredDailyMileages.forEach(r => {
             const rowDateStr = new Date(r.date).toLocaleDateString('sv-SE');
-            // 증빙 URL 버튼 만들기
             const evidenceBtn = r.evidence_url 
-                ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill"><i class="bi bi-image"></i> 보기</a>` 
+                ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill py-0 px-2"><i class="bi bi-image"></i> 보기</a>` 
                 : `<span class="text-muted small">없음</span>`;
 
             const tr = document.createElement('tr');
