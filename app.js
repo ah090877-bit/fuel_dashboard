@@ -94,7 +94,6 @@ const app = {
         const mgrLocks = document.querySelectorAll('.btn-mgr-lock');
         const btnManageComp = document.getElementById('btnManageCompany');
         
-        // ⭐️ 수정된 에러 방어 로직 (버튼이 없어도 터지지 않음)
         mgrLocks.forEach(b => b.removeAttribute('disabled'));
 
         if (role === 'manager') {
@@ -251,11 +250,13 @@ const app = {
         document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
     },
 
+    // ⭐️ 파일 업로드 처리와 함께 서버에 데이터 전송
     handleMileageSubmit: async (e) => {
         e.preventDefault();
         const date = document.getElementById('inputDate').value;
         const distance = parseInt(document.getElementById('inputDistance').value, 10);
         const company = document.getElementById('inputCompany').value;
+        const fileInput = document.getElementById('inputEvidence');
 
         if (!company) return alert('기입 가능한 소속 화주사가 없습니다. 관리자에게 문의하세요.');
         if (isNaN(distance) || distance <= 0) return alert('주행거리를 올바르게 입력하세요.');
@@ -263,21 +264,36 @@ const app = {
         const payload = {
             action: 'saveMileage', date, distance, phone: app.user.phone,
             name: app.user.name, car_number: app.user.car_number,
-            company: company, isUpdate: false, edited_by: app.user.name
+            company: company, isUpdate: false, edited_by: app.user.name,
+            fileBase64: null, mimeType: null
         };
+
+        // 파일이 선택된 경우 Base64 인코딩 진행
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            payload.mimeType = file.type;
+            app.showLoading(true); // 파일 읽는 동안 로딩바
+            payload.fileBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result.split(',')[1]); 
+                reader.readAsDataURL(file);
+            });
+            app.showLoading(false);
+        }
 
         let res = await app.fetchAPI(payload);
         
         if (res === null) {
-            if (confirm('해당 날짜, 해당 화주사에 이미 기록이 존재합니다.\n새로운 거리로 수정(덮어쓰기) 하시겠습니까?')) {
+            if (confirm('해당 날짜, 해당 화주사에 이미 기록이 존재합니다.\n새로운 거리(및 증빙)로 덮어쓰기 하시겠습니까?')) {
                 payload.isUpdate = true;
                 res = await app.fetchAPI(payload);
             } else { return; }
         }
 
         if (res) {
-            alert('주행기록이 성공적으로 저장되었습니다.');
+            alert('주행기록(증빙 포함)이 성공적으로 저장되었습니다.');
             document.getElementById('inputDistance').value = '';
+            fileInput.value = ''; // 파일 필드 초기화
             
             const updatedRecords = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
             if (updatedRecords) {
@@ -759,6 +775,7 @@ const app = {
         app.applyDailySearch();
     },
 
+    // ⭐️ 일별 상세 테이블에 증빙자료(링크) 추가 렌더링
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
         const fStart = document.getElementById('searchDailyStart').value;
@@ -783,12 +800,17 @@ const app = {
         tbody.innerHTML = '';
         
         if(app.filteredDailyMileages.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">결과가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">결과가 없습니다.</td></tr>';
             return;
         }
 
         app.filteredDailyMileages.forEach(r => {
             const rowDateStr = new Date(r.date).toLocaleDateString('sv-SE');
+            // 증빙 URL 버튼 만들기
+            const evidenceBtn = r.evidence_url 
+                ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill"><i class="bi bi-image"></i> 보기</a>` 
+                : `<span class="text-muted small">없음</span>`;
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${rowDateStr}</td>
@@ -797,6 +819,7 @@ const app = {
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
                 <td class="fw-bold text-primary">${Number(r.distance).toLocaleString()} km</td>
                 <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
+                <td class="text-center">${evidenceBtn}</td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-primary btn-mgr-lock" onclick="app.openEditDailyModal('${rowDateStr}', '${r.phone}', '${r.company}', '${r.distance}', '${r.name}')">수정</button>
@@ -929,8 +952,8 @@ const app = {
 
     downloadDailyExcel: () => {
         if(app.filteredDailyMileages.length === 0) return alert('결과가 없습니다.');
-        let htmlTable = `<table border="1"><thead><tr style="background-color:#f2f2f2;"><th>운행일자</th><th>기사명</th><th>전화번호</th><th>차량번호</th><th>화주사</th><th>주행거리(km)</th><th>정산유류비(원)</th></tr></thead><tbody>`;
-        app.filteredDailyMileages.forEach(r => { htmlTable += `<tr><td>${new Date(r.date).toLocaleDateString('sv-SE')}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.car_number}</td><td>${r.company}</td><td>${r.distance}</td><td>${r.fuel_cost}</td></tr>`; });
+        let htmlTable = `<table border="1"><thead><tr style="background-color:#f2f2f2;"><th>운행일자</th><th>기사명</th><th>전화번호</th><th>차량번호</th><th>화주사</th><th>주행거리(km)</th><th>정산유류비(원)</th><th>증빙URL</th></tr></thead><tbody>`;
+        app.filteredDailyMileages.forEach(r => { htmlTable += `<tr><td>${new Date(r.date).toLocaleDateString('sv-SE')}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.car_number}</td><td>${r.company}</td><td>${r.distance}</td><td>${r.fuel_cost}</td><td>${r.evidence_url}</td></tr>`; });
         htmlTable += "</tbody></table>";
         const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel' });
         const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
