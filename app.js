@@ -1,4 +1,4 @@
-// 🚨 알려주신 구글 웹앱 주소 세팅 완료
+// 🚨 알려주신 구글 웹앱 주소
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF3a9lj-9LjmXp1ZTk-yL97znfSniJ1_kixxVuDl0Hjar0/exec';
 
 const app = {
@@ -94,14 +94,9 @@ const app = {
     applyRoleRestrictions: (role) => {
         const mgrLocks = document.querySelectorAll('.btn-mgr-lock');
         const btnManageComp = document.getElementById('btnManageCompany');
-        
         mgrLocks.forEach(b => b.removeAttribute('disabled'));
-
-        if (role === 'manager') {
-            if(btnManageComp) btnManageComp.classList.add('d-none'); 
-        } else {
-            if(btnManageComp) btnManageComp.classList.remove('d-none'); 
-        }
+        if (role === 'manager') { if(btnManageComp) btnManageComp.classList.add('d-none'); } 
+        else { if(btnManageComp) btnManageComp.classList.remove('d-none'); }
     },
 
     showLoading: (show) => {
@@ -124,6 +119,7 @@ const app = {
         return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     },
 
+    // 단일 사진 압축 함수
     compressImage: async (file) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -153,7 +149,6 @@ const app = {
     },
 
     fetchAPI: async (payload) => {
-        app.showLoading(true);
         try {
             const response = await fetch(GAS_URL, {
                 method: 'POST',
@@ -167,19 +162,19 @@ const app = {
         } catch (error) {
             alert("서버 연결 오류: " + error.message);
             return null;
-        } finally { 
-            app.showLoading(false);
         }
     },
 
     handleLogin: async (e) => {
         e.preventDefault();
+        app.showLoading(true);
         const phone = document.getElementById('loginPhone').value.trim();
         const pw = document.getElementById('loginPw').value.trim();
         
         const hashedPassword = await app.hashPassword(pw);
         const data = await app.fetchAPI({ action: 'login', phone, password_hash: hashedPassword });
-        
+        app.showLoading(false);
+
         if (data) {
             if (app.loginTargetRole === 'driver' && data.role !== 'driver') return alert('기사 계정이 아닙니다.');
             if (app.loginTargetRole === 'admin' && data.role === 'driver') return alert('관리자 계정이 아닙니다.');
@@ -200,8 +195,10 @@ const app = {
         if (newPw !== newPwConfirm) return alert('비밀번호가 불일치합니다.');
         if (newPw === '0000') return alert('초기 비밀번호(0000)는 사용할 수 없습니다.');
 
+        app.showLoading(true);
         const hashedPassword = await app.hashPassword(newPw);
         const data = await app.fetchAPI({ action: 'changePassword', phone: app.user.phone, new_password_hash: hashedPassword });
+        app.showLoading(false);
 
         if (data) {
             alert('비밀번호가 안전하게 변경되었습니다. 보안을 위해 변경된 비밀번호로 다시 로그인해 주세요.');
@@ -265,7 +262,11 @@ const app = {
             validRecords.sort((a,b) => new Date(b.date) - new Date(a.date));
             validRecords.forEach(r => {
                 const rowDateStr = new Date(r.date).toLocaleDateString('sv-SE');
-                const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0"><i class="bi bi-image"></i> 보기</a>` : `<span class="text-muted small">없음</span>`;
+                let evidenceBtn = `<span class="text-muted small">없음</span>`;
+                if (r.evidence_url) {
+                    const urls = r.evidence_url.split(',');
+                    evidenceBtn = urls.map((url, idx) => `<a href="${url.trim()}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0 me-1 mb-1"><i class="bi bi-image"></i> 사진${idx+1}</a>`).join('');
+                }
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -314,46 +315,59 @@ const app = {
         document.getElementById('hdnDriverEditMode').value = "false";
         document.getElementById('driverFormTitle').innerHTML = '<i class="bi bi-pencil-square"></i> 주행거리 기록 및 증빙';
         
-        document.getElementById('lblEvidence').innerHTML = '<i class="bi bi-camera-fill"></i> 계기판/영수증 증빙 (필수)';
+        document.getElementById('lblEvidence').innerHTML = '<i class="bi bi-camera-fill"></i> 계기판/영수증 증빙 (최대 4장)';
         document.getElementById('lblEvidence').classList.replace('text-primary', 'text-danger');
-        document.getElementById('txtEvidenceHelp').innerText = '최초 등록 시 사진 첨부는 필수입니다.';
+        document.getElementById('txtEvidenceHelp').innerText = '최초 등록 시 사진 첨부는 필수입니다. (최대 4장)';
 
         document.getElementById('btnSubmitMileage').innerHTML = '<i class="bi bi-cloud-arrow-up"></i> 등록하기';
         document.getElementById('btnSubmitMileage').classList.replace('w-75', 'w-100');
         document.getElementById('btnCancelEdit').classList.add('d-none');
     },
 
+    // ⭐️ 중복 등록 방지 및 다중 사진(최대 4장) 처리 적용
     handleMileageSubmit: async (e) => {
         e.preventDefault();
+        const submitBtn = document.getElementById('btnSubmitMileage');
+        
         const date = document.getElementById('inputDate').value;
         const distance = parseInt(document.getElementById('inputDistance').value, 10);
         const company = document.getElementById('inputCompany').value;
         const fileInput = document.getElementById('inputEvidence');
         const isEditMode = document.getElementById('hdnDriverEditMode').value === "true";
 
-        if (!company) return alert('기입 가능한 소속 화주사가 없습니다. 관리자에게 문의하세요.');
+        if (!company) return alert('기입 가능한 소속 화주사가 없습니다.');
         if (isNaN(distance) || distance <= 0) return alert('주행거리를 올바르게 입력하세요.');
 
         if (!isEditMode && fileInput.files.length === 0) {
-            return alert('계기판이나 영수증 등 증빙 사진을 반드시 첨부해 주셔야 등록이 가능합니다.');
+            return alert('계기판이나 영수증 등 증빙 사진을 반드시 첨부해 주셔야 합니다.');
         }
+        if (fileInput.files.length > 4) {
+            return alert('사진은 한 번에 최대 4장까지만 첨부 가능합니다.');
+        }
+
+        // 제출 버튼 이중클릭 잠금
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 처리중...';
+        app.showLoading(true);
 
         const payload = {
             action: 'saveMileage', date, distance, phone: app.user.phone,
             name: app.user.name, car_number: app.user.car_number,
             company: company, isUpdate: isEditMode, edited_by: app.user.name,
-            fileBase64: null, mimeType: null
+            files: [] // 다중 파일 배열 생성
         };
 
         if (fileInput.files.length > 0) {
             try {
-                const file = fileInput.files[0];
-                payload.mimeType = "image/jpeg"; 
-                app.showLoading(true); 
-                payload.fileBase64 = await app.compressImage(file);
-                app.showLoading(false);
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    const file = fileInput.files[i];
+                    const base64 = await app.compressImage(file);
+                    payload.files.push({ fileBase64: base64, mimeType: "image/jpeg" });
+                }
             } catch (err) {
                 app.showLoading(false);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = isEditMode ? '<i class="bi bi-check-circle"></i> 수정사항 저장' : '<i class="bi bi-cloud-arrow-up"></i> 등록하기';
                 return alert("사진 처리 중 오류가 발생했습니다. 다른 사진을 선택해 주세요.");
             }
         }
@@ -361,11 +375,15 @@ const app = {
         let res = await app.fetchAPI(payload);
         
         if (res === null) {
-            if (confirm('해당 날짜, 해당 화주사에 이미 기록이 존재합니다.\n입력하신 거리(및 증빙)로 덮어쓰기 수정하시겠습니까?')) {
+            if (confirm('해당 날짜에 이미 기록이 존재합니다.\n입력하신 거리(및 증빙)로 덮어쓰기 수정하시겠습니까?')) {
                 payload.isUpdate = true;
                 res = await app.fetchAPI(payload);
-            } else { return; }
+            }
         }
+
+        app.showLoading(false);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = isEditMode ? '<i class="bi bi-check-circle"></i> 수정사항 저장' : '<i class="bi bi-cloud-arrow-up"></i> 등록하기';
 
         if (res) {
             alert('주행기록 및 증빙자료가 성공적으로 저장되었습니다.');
@@ -381,7 +399,9 @@ const app = {
     },
 
     loadAdminDashboardData: async () => {
+        app.showLoading(true);
         const data = await app.fetchAPI({ action: 'getAdminData', role: app.user.role, company: app.user.company });
+        app.showLoading(false);
         if (data) {
             app.rawDb = data;
             app.populateAdminCompanyFilter();
@@ -600,6 +620,7 @@ const app = {
 
     handleDriverFormSubmit: async (e) => {
         e.preventDefault();
+        app.showLoading(true);
         const originPhone = document.getElementById('hdnEditOriginPhone').value;
         const name = document.getElementById('mDriverName').value.trim();
         const phone = document.getElementById('mDriverPhone').value.trim();
@@ -607,8 +628,8 @@ const app = {
         const compSelect = document.getElementById('mDriverCompany');
         const company = compSelect.options[compSelect.selectedIndex]?.value || "";
 
-        if(!/^010\d{8}$/.test(phone)) return alert('휴대폰 번호가 올바르지 않습니다.');
-        if(!company) return alert('화주사를 선택해 주세요.');
+        if(!/^010\d{8}$/.test(phone)) { app.showLoading(false); return alert('휴대폰 번호가 올바르지 않습니다.'); }
+        if(!company) { app.showLoading(false); return alert('화주사를 선택해 주세요.'); }
 
         bootstrap.Modal.getInstance(document.getElementById('mdlDriver')).hide();
 
@@ -632,19 +653,24 @@ const app = {
             const res = await app.fetchAPI({ action: 'updateDriver', originPhone, name, phone, car_number, company });
             if (res) alert('수정되었습니다.');
         }
+        app.showLoading(false);
         app.loadAdminDashboardData();
     },
 
     deleteDriverProcess: async (phone, name) => {
         if(app.user.role === 'manager') return alert('운영자는 권한이 없습니다.');
         if(!confirm(`정말 ${name} 기사님을 삭제하시겠습니까?`)) return;
+        app.showLoading(true);
         const res = await app.fetchAPI({ action: 'deleteDriver', phone });
+        app.showLoading(false);
         if(res) app.loadAdminDashboardData();
     },
 
     resetDriverPasswordProcess: async (phone, name) => {
         if(!confirm(`${name} 기사님의 비밀번호를 0000 으로 초기화합니다.`)) return;
+        app.showLoading(true);
         const res = await app.fetchAPI({ action: 'resetPassword', phone, default_hash: '0000' });
+        app.showLoading(false);
         if(res) {
             alert(`초기화 완료 (비밀번호: 0000)`);
             app.loadAdminDashboardData();
@@ -672,8 +698,11 @@ const app = {
         if (isNaN(distance) || distance <= 0) return alert('올바른 거리를 입력하세요.');
         bootstrap.Modal.getInstance(document.getElementById('mdlEditDaily')).hide();
 
+        app.showLoading(true);
         const payload = { action: 'updateDailyMileage', date, phone, company, distance, name, edited_by: app.user.name };
         const res = await app.fetchAPI(payload);
+        app.showLoading(false);
+        
         if(res) {
             app.showToast('해당 일자의 운행 거리가 수정 재계산되었습니다.');
             app.loadAdminDashboardData();
@@ -682,8 +711,10 @@ const app = {
 
     deleteDailyProcess: async (dateStr, phone, company, name) => {
         if(!confirm(`정말 [${name}] 기사님의 [${dateStr}] 일자 [${company}] 운행 기록을 영구 삭제하시겠습니까?`)) return;
+        app.showLoading(true);
         const payload = { action: 'deleteDailyMileage', date: dateStr, phone, company };
         const res = await app.fetchAPI(payload);
+        app.showLoading(false);
         if(res) {
             app.showToast('운행 기록이 삭제되었습니다.');
             app.loadAdminDashboardData();
@@ -732,7 +763,10 @@ const app = {
         if (isNaN(val) || val <= 0) return;
 
         bootstrap.Modal.getInstance(document.getElementById('mdlFuelRate')).hide();
+        app.showLoading(true);
         const res = await app.fetchAPI({ action: 'updateFuelRate', month: selectedMonth, fuel_rate: val, company: selectedCompany });
+        app.showLoading(false);
+        
         if(res) {
             alert(`단가 소급 적용 완료`);
             app.loadAdminDashboardData();
@@ -769,7 +803,9 @@ const app = {
 
     deleteFuelRate: async (month, company) => {
         if(!confirm(`[${month}] 월의 단가 설정을 삭제하시겠습니까? (과거 유류비가 0원으로 바뀔 수 있습니다)`)) return;
+        app.showLoading(true);
         const res = await app.fetchAPI({ action: 'deleteFuelRate', month, company });
+        app.showLoading(false);
         if(res) app.loadAdminDashboardData();
     },
 
@@ -814,7 +850,9 @@ const app = {
         const input = document.getElementById('mNewCompanyName');
         const cName = input.value.trim();
         if(!cName) return alert('이름을 입력하세요.');
+        app.showLoading(true);
         const res = await app.fetchAPI({ action: 'addMasterCompany', companyName: cName });
+        app.showLoading(false);
         if(res) {
             input.value = '';
             app.loadAdminDashboardData(); 
@@ -825,7 +863,9 @@ const app = {
     editMasterCompanyPrompt: async (oldName) => {
         const newName = prompt(`[${oldName}] 화주사의 새로운 이름을 입력하세요. (기존 데이터 일괄 변경됨)`, oldName);
         if(!newName || newName.trim() === oldName) return;
+        app.showLoading(true);
         const res = await app.fetchAPI({ action: 'editMasterCompany', oldName: oldName, newName: newName.trim() });
+        app.showLoading(false);
         if(res) {
             app.showToast('화주사 이름이 성공적으로 일괄 수정되었습니다.');
             app.loadAdminDashboardData();
@@ -836,7 +876,9 @@ const app = {
     toggleCompanyStatusProcess: async (cName, currentStatus) => {
         const stTxt = currentStatus === 'active' ? '운영 중단(기입 불가)' : '운영 재개(기입 가능)';
         if(!confirm(`[${cName}] 화주사를 ${stTxt} 상태로 변경하시겠습니까?`)) return;
+        app.showLoading(true);
         const res = await app.fetchAPI({ action: 'toggleCompanyStatus', companyName: cName, status: currentStatus });
+        app.showLoading(false);
         if(res) {
             app.loadAdminDashboardData();
             setTimeout(() => { app.renderMasterCompanies(); }, 500);
@@ -851,6 +893,7 @@ const app = {
         app.applyDailySearch();
     },
 
+    // 관리자 탭 - 다중 사진 렌더링
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
         const fStart = document.getElementById('searchDailyStart').value;
@@ -881,9 +924,11 @@ const app = {
 
         app.filteredDailyMileages.forEach(r => {
             const rowDateStr = new Date(r.date).toLocaleDateString('sv-SE');
-            const evidenceBtn = r.evidence_url 
-                ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill py-0 px-2"><i class="bi bi-image"></i> 보기</a>` 
-                : `<span class="text-muted small">없음</span>`;
+            let evidenceBtn = `<span class="text-muted small">없음</span>`;
+            if (r.evidence_url) {
+                const urls = r.evidence_url.split(',');
+                evidenceBtn = urls.map((url, idx) => `<a href="${url.trim()}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill py-0 px-2 me-1 mb-1"><i class="bi bi-image"></i> 사진${idx+1}</a>`).join('');
+            }
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
