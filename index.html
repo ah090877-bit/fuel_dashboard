@@ -67,39 +67,48 @@
 
         <div class="card shadow-sm border-0 rounded-4 mb-4">
             <div class="card-body p-4">
-                <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-pencil-square"></i> 주행거리 기록</h5>
+                <h5 class="fw-bold mb-4 text-primary" id="driverFormTitle"><i class="bi bi-pencil-square"></i> 주행거리 기록 및 증빙</h5>
                 <form id="mileageForm">
+                    <input type="hidden" id="hdnDriverEditMode" value="false">
+
                     <div class="row g-2 mb-3">
                         <div class="col-6"><label class="form-label small fw-bold">운행 날짜</label><input type="date" class="form-control form-control-lg" id="inputDate" required></div>
                         <div class="col-6"><label class="form-label small fw-bold">소속 화주사</label><select class="form-select form-control-lg fw-bold text-primary" id="inputCompany" required></select></div>
                     </div>
                     <div class="mb-3"><label class="form-label small fw-bold">주행거리 (km)</label><input type="number" class="form-control form-control-lg" id="inputDistance" placeholder="숫자만 입력해 주세요" required></div>
+                    
                     <div class="mb-4">
-                        <label class="form-label small fw-bold"><i class="bi bi-camera"></i> 계기판/영수증 증빙 (선택)</label>
-                        <input type="file" class="form-control form-control-lg" id="inputEvidence" accept="image/*">
+                        <label class="form-label small fw-bold text-danger" id="lblEvidence"><i class="bi bi-camera-fill"></i> 계기판/영수증 증빙 (필수)</label>
+                        <input type="file" class="form-control form-control-lg" id="inputEvidence" accept="image/*" capture="environment">
+                        <small class="text-muted" id="txtEvidenceHelp">최초 등록 시 사진 첨부는 필수입니다.</small>
                     </div>
-                    <button type="submit" class="btn btn-success w-100 btn-lg py-3 rounded-3 shadow" id="btnSubmitMileage"><i class="bi bi-cloud-arrow-up"></i> 등록하기</button>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-secondary btn-lg py-3 rounded-3 shadow w-25 d-none" id="btnCancelEdit" onclick="app.cancelDriverEdit()">취소</button>
+                        <button type="submit" class="btn btn-success btn-lg py-3 rounded-3 shadow w-100" id="btnSubmitMileage"><i class="bi bi-cloud-arrow-up"></i> 등록하기</button>
+                    </div>
                 </form>
             </div>
         </div>
 
         <div class="d-flex justify-content-between align-items-end mb-2">
-            <h6 class="fw-bold text-dark mb-0">내 운행 정산 요약</h6>
+            <h6 class="fw-bold text-dark mb-0">내 운행 기록 상세 내역</h6>
             <input type="month" id="driverMonthFilter" class="form-control form-control-sm w-auto d-inline-block">
         </div>
+
+        <div class="dash-card bg-white mb-4">
+            <div class="table-responsive">
+                <table class="table table-sm table-modern table-hover align-middle text-nowrap">
+                    <thead><tr><th>날짜</th><th>화주사</th><th>거리</th><th>정산비</th><th>증빙</th><th class="text-center">관리</th></tr></thead>
+                    <tbody id="tblDriverMonthBody"></tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="row g-3 mb-4">
             <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 거리</p><h6 class="fw-bold mb-0 text-primary" id="dStatDistance">0 km</h6></div></div>
             <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 유류비</p><h6 class="fw-bold mb-0 text-danger" id="dStatCost">0 원</h6></div></div>
             <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">운행 일수</p><h6 class="fw-bold mb-0 text-dark" id="dStatDays">0일</h6></div></div>
-        </div>
-
-        <div class="dash-card bg-white">
-            <div class="table-responsive">
-                <table class="table table-sm table-modern table-hover align-middle">
-                    <thead><tr><th>날짜</th><th>화주사</th><th>거리</th><th>정산비</th></tr></thead>
-                    <tbody id="tblDriverMonthBody"></tbody>
-                </table>
-            </div>
         </div>
     </div>
 
@@ -201,7 +210,7 @@
                         <div><button class="btn btn-sm btn-outline-success" onclick="app.downloadDailyExcel()"><i class="bi bi-file-excel"></i> 엑셀 받기</button></div>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-modern align-middle table-hover">
+                        <table class="table table-modern align-middle table-hover text-nowrap">
                             <thead><tr><th>운행일</th><th>기사명</th><th>차량번호</th><th>화주사</th><th>거리</th><th>유류비</th><th>증빙</th><th class="text-center">관리</th></tr></thead>
                             <tbody id="tblDailyRecordsBody"></tbody>
                         </table>
