@@ -128,7 +128,6 @@
         </div>
     </div>
 
-    <!-- ⭐️ 3. 직관적인 환영 메시지 렌더링을 위한 관리자 헤더 UI 구역 -->
     <div id="view-admin" class="container-fluid view-section d-none py-4 px-lg-5">
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3 bg-white p-3 rounded-4 shadow-sm border-start border-5 border-primary">
             <div>
@@ -149,7 +148,8 @@
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-unsubmitted" data-bs-toggle="pill" data-bs-target="#pane-unsubmitted">미입력 현황</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-drivers" data-bs-toggle="pill" data-bs-target="#pane-drivers">기사 관리</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-daily" data-bs-toggle="pill" data-bs-target="#pane-lookup-daily">일별 운행 조회</button></li>
-            <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-monthly" data-bs-toggle="pill" data-bs-target="#pane-lookup-monthly">월별 운행 요약</button></li>
+            <!-- ⭐️ 탭 이름 '기간별 운행 요약' 으로 조금 더 명확하게 수정 -->
+            <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-monthly" data-bs-toggle="pill" data-bs-target="#pane-lookup-monthly">기간별 운행 요약</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-receipts" data-bs-toggle="pill" data-bs-target="#pane-receipts">주유 영수증</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-fuelrate" data-bs-toggle="pill" data-bs-target="#pane-fuelrate">단가 관리</button></li>
         </ul>
@@ -191,12 +191,15 @@
                 </div>
             </div>
 
+            <!-- ⭐️ 일별 운행 조회 필터 영역에 시작/종료일 나란히 추가 -->
             <div class="tab-pane fade" id="pane-lookup-daily">
                 <div class="dash-card mb-4">
-                    <div class="row g-2 mb-3">
-                        <div class="col-6 col-md-4"><label class="form-label small fw-bold text-muted mb-1">조회 연월</label><input type="month" class="form-control fw-bold" id="searchDailyMonth"></div>
-                        <div class="col-6 col-md-4"><label class="form-label small fw-bold text-muted mb-1">통합 검색어</label><input type="text" class="form-control" id="searchDailyKeyword" placeholder="기사명 검색"></div>
-                        <div class="col-12 col-md-4 d-flex align-items-end"><button class="btn btn-primary px-4 rounded-2 w-100 h-75" onclick="app.applyDailySearch()">조회하기</button></div>
+                    <div class="row g-2 mb-3 align-items-end">
+                        <div class="col-6 col-md-2"><label class="form-label small fw-bold text-muted mb-1">연월</label><input type="month" class="form-control fw-bold" id="searchDailyMonth"></div>
+                        <div class="col-6 col-md-2"><label class="form-label small fw-bold text-muted mb-1">시작일</label><input type="date" class="form-control fw-bold" id="searchDailyStartDate"></div>
+                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">종료일</label><input type="date" class="form-control fw-bold" id="searchDailyEndDate"></div>
+                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">검색어</label><input type="text" class="form-control" id="searchDailyKeyword" placeholder="기사명 검색"></div>
+                        <div class="col-12 col-md-2"><button class="btn btn-primary px-4 rounded-2 w-100" onclick="app.applyDailySearch()">조회</button></div>
                     </div>
                 </div>
                 <div class="dash-card">
@@ -213,17 +216,18 @@
                 </div>
             </div>
 
+            <!-- ⭐️ 월별 요약 필터 영역에서 화주사를 지우고, 시작/종료일 추가 -->
             <div class="tab-pane fade" id="pane-lookup-monthly">
                 <div class="dash-card mb-4">
-                    <div class="row g-2 mb-3">
-                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">연월 필터</label><input type="month" class="form-control fw-bold" id="searchMonthlyMonth"></div>
-                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">화주사 필터</label><select class="form-select fw-bold text-primary" id="searchMonthlyCompany"></select></div>
+                    <div class="row g-2 mb-3 align-items-end">
+                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">시작일</label><input type="date" class="form-control fw-bold" id="searchMonthlyStartDate"></div>
+                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">종료일</label><input type="date" class="form-control fw-bold" id="searchMonthlyEndDate"></div>
                         <div class="col-12 col-md-4 d-flex align-items-end"><button class="btn btn-primary px-4 w-100 rounded-2" onclick="app.applyMonthlySearch()">조회</button></div>
                     </div>
                 </div>
                 <div class="dash-card">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold mb-0 text-primary" id="txtMonthlyResultTitle">월별 요약 결과</h5>
+                        <h5 class="fw-bold mb-0 text-primary" id="txtMonthlyResultTitle">기간별 운행 요약 결과</h5>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
@@ -287,7 +291,6 @@
         </div>
     </div>
 
-    <!-- ⭐️ 2. 모달 제목을 '단가 설정/수정' 으로 변경 -->
     <div class="modal fade" id="mdlFuelRate" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content shadow rounded-4 border-0"><form id="frmFuelRate"><div class="modal-body p-4 text-center"><h6 class="fw-bold mb-4">단가 설정 / 수정</h6><label class="form-label small fw-bold text-muted mb-1 text-start d-block">적용 월</label><input type="month" class="form-control mb-3 fw-bold" id="mFuelRateMonth" required><label class="form-label small fw-bold text-muted mb-1 text-start d-block">대상 화주사</label><select class="form-select mb-3 fw-bold text-primary" id="mFuelRateCompany"></select><label class="form-label small fw-bold text-muted mb-1 text-start d-block">1km 당 금액(원)</label><input type="number" class="form-control fw-bold text-danger" id="mFuelRateVal" required></div><div class="modal-footer"><button type="submit" class="btn btn-primary w-100">설정 및 기존 기록 일괄 재계산</button></div></form></div></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
