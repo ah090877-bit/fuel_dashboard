@@ -1,4 +1,3 @@
-// 🚨 알려주신 구글 웹앱 주소 유지
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF3a9lj-9LjmXp1ZTk-yL97znfSniJ1_kixxVuDl0Hjar0/exec';
 
 const app = {
@@ -8,6 +7,7 @@ const app = {
     filteredDailyMileages: [],
     filteredMonthlyMileages: [],
     filteredAdminReceipts: [],
+    charts: {},
 
     init: () => {
         app.bindEvents();
@@ -17,9 +17,11 @@ const app = {
     bindEvents: () => {
         document.getElementById('loginForm')?.addEventListener('submit', app.handleLogin);
         document.getElementById('mileageForm')?.addEventListener('submit', app.handleMileageSubmit);
-        document.getElementById('receiptForm')?.addEventListener('submit', app.handleReceiptSubmit); // 영수증 폼 제출
+        document.getElementById('receiptForm')?.addEventListener('submit', app.handleReceiptSubmit);
+        document.getElementById('frmDriver')?.addEventListener('submit', app.handleDriverFormSubmit);
+        document.getElementById('frmFuelRate')?.addEventListener('submit', app.handleFuelRateSubmit);
+        document.getElementById('frmDriverPassword')?.addEventListener('submit', app.handleDriverPasswordSubmit); 
         
-        // ⭐️ 전/후 계기판 입력 시 '실제 운행거리' 자동 계산 로직
         const startEl = document.getElementById('inputStartDist');
         const endEl = document.getElementById('inputEndDist');
         const distEl = document.getElementById('inputDistance');
@@ -34,7 +36,6 @@ const app = {
 
         document.getElementById('driverMonthFilter')?.addEventListener('change', app.renderDriverRecords);
         document.getElementById('driverReceiptMonthFilter')?.addEventListener('change', app.renderDriverReceipts);
-        
         document.getElementById('adminCompanyFilter')?.addEventListener('change', app.refreshAdminViews);
 
         const tabElList = [].slice.call(document.querySelectorAll('#adminTabs button'));
@@ -46,6 +47,7 @@ const app = {
                     app.renderUnsubmittedTable();
                 }
                 if (e.target.id === 'tab-receipts') app.applyReceiptSearch();
+                if (e.target.id === 'tab-fuelrate') app.renderFuelRateTable();
             });
         });
     },
@@ -59,6 +61,12 @@ const app = {
         app.loginTargetRole = role;
         document.getElementById('roleSelection').classList.add('d-none');
         document.getElementById('loginForm').classList.remove('d-none');
+        document.getElementById('loginTitle').innerText = (role === 'driver') ? '기사님 로그인' : '관리자 로그인';
+    },
+
+    hideLoginForm: () => {
+        document.getElementById('loginForm').classList.add('d-none');
+        document.getElementById('roleSelection').classList.remove('d-none');
     },
 
     route: (target) => {
@@ -78,12 +86,13 @@ const app = {
         }
     },
 
-    applyRoleRestrictions: (role) => {
-        const mgrLocks = document.querySelectorAll('.btn-mgr-lock');
-        const btnManageComp = document.getElementById('btnManageCompany');
-        mgrLocks.forEach(b => b.removeAttribute('disabled'));
-        if (role === 'manager') { if(btnManageComp) btnManageComp.classList.add('d-none'); } 
-        else { if(btnManageComp) btnManageComp.classList.remove('d-none'); }
+    formatDateStr: (dateVal) => {
+        if (!dateVal) return '';
+        if (typeof dateVal === 'string') {
+            if (dateVal.includes('T')) return dateVal.split('T')[0];
+            return dateVal.substring(0, 10);
+        }
+        return String(dateVal).substring(0, 10);
     },
 
     showLoading: (show) => {
@@ -100,25 +109,6 @@ const app = {
         const data = new TextEncoder().encode(pw);
         const hash = await crypto.subtle.digest('SHA-256', data);
         return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-    },
-
-    compressImage: async (file) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width; let height = img.height;
-                    if (width > 800) { height *= 800 / width; width = 800; }
-                    canvas.width = width; canvas.height = height;
-                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]); 
-                };
-            };
-        });
     },
 
     fetchAPI: async (payload) => {
@@ -148,6 +138,31 @@ const app = {
 
     logout: () => { localStorage.removeItem('fuelUser'); app.user = null; app.route('login'); },
 
+    openDriverPasswordModal: () => {
+        document.getElementById('dNewPw').value = '';
+        document.getElementById('dNewPwConfirm').value = '';
+        new bootstrap.Modal(document.getElementById('mdlDriverPassword')).show();
+    },
+
+    handleDriverPasswordSubmit: async (e) => {
+        e.preventDefault();
+        const newPw = document.getElementById('dNewPw').value.trim();
+        const newPwConfirm = document.getElementById('dNewPwConfirm').value.trim();
+
+        if (newPw !== newPwConfirm) return alert('비밀번호 확인이 일치하지 않습니다.');
+        if (newPw === '0000') return alert('초기 암호인 0000은 재사용할 수 없습니다.');
+
+        app.showLoading(true);
+        const hashedPassword = await app.hashPassword(newPw);
+        const data = await app.fetchAPI({ action: 'changePassword', phone: app.user.phone, new_password_hash: hashedPassword });
+        app.showLoading(false);
+
+        if (data) {
+            alert('비밀번호가 정상적으로 변경되었습니다.');
+            bootstrap.Modal.getInstance(document.getElementById('mdlDriverPassword')).hide();
+        }
+    },
+
     initDriverView: () => {
         app.cancelDriverEdit(); 
         document.getElementById('driverGreeting').innerHTML = `이름: <b class="text-primary">${app.escapeXSS(app.user.name)}</b> 기사님`;
@@ -160,15 +175,10 @@ const app = {
         const activeComps = app.user.activeCompanies || [];
         const myCompanies = (app.user.company || "").split(',').map(c => c.trim()).filter(c => c && activeComps.includes(c));
         
-        if (myCompanies.length === 0) {
-            compSelect1.innerHTML = '<option value="">선택가능한 화주사가 없습니다.</option>';
-            compSelect2.innerHTML = '<option value="">선택가능한 화주사가 없습니다.</option>';
-        } else {
-            myCompanies.forEach(c => {
-                compSelect1.innerHTML += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`;
-                compSelect2.innerHTML += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`;
-            });
-        }
+        myCompanies.forEach(c => {
+            compSelect1.innerHTML += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`;
+            compSelect2.innerHTML += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`;
+        });
 
         const currentMonthStr = new Date().toISOString().substring(0, 7);
         document.getElementById('driverMonthFilter').value = currentMonthStr;
@@ -178,15 +188,13 @@ const app = {
         app.renderDriverReceipts();
     },
 
-    // 운행기록 렌더링 (전/후 키로수 표시)
     renderDriverRecords: () => {
         const selectedMonth = document.getElementById('driverMonthFilter').value;
         const records = app.user.driverRecords?.mileages || [];
-        
         let totalDistance = 0; let totalCost = 0; let validRecords = [];
 
         records.forEach(r => {
-            if (new Date(r.date).toLocaleDateString('sv-SE').substring(0, 7) === selectedMonth) {
+            if (app.formatDateStr(r.date).substring(0, 7) === selectedMonth) {
                 validRecords.push(r);
                 totalDistance += Number(r.distance) || 0;
                 totalCost += Number(r.fuel_cost) || 0;
@@ -198,16 +206,19 @@ const app = {
         if(validRecords.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted small py-3">해당 월 기록이 없습니다.</td></tr>'; } 
         else {
             validRecords.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(r => {
-                const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url.split(',')[0]}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0">보기</a>` : `<span class="text-muted small">없음</span>`;
+                let evidenceBtn = `<span class="text-muted small">없음</span>`;
+                if (r.evidence_url) {
+                    evidenceBtn = r.evidence_url.split(',').map((url, idx) => `<a href="${url.trim()}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0 me-1">사진${idx+1}</a>`).join('');
+                }
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td class="small">${new Date(r.date).toLocaleDateString('ko-KR', {month:'2-digit', day:'2-digit'})}</td>
+                    <td class="small">${app.formatDateStr(r.date).substring(5, 10)}</td>
                     <td class="small text-muted">${app.escapeXSS(r.company)}</td>
-                    <td class="small text-secondary">${r.start_distance} -> ${r.end_distance}</td>
+                    <td class="small text-secondary">${r.start_distance} → ${r.end_distance}</td>
                     <td class="fw-bold text-dark">${Number(r.distance).toLocaleString()} km</td>
                     <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
                     <td class="text-center">${evidenceBtn}</td>
-                    <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyRecord('${new Date(r.date).toLocaleDateString('sv-SE')}', '${app.escapeXSS(r.company)}')">삭제</button></td>
+                    <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}')">삭제</button></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -217,26 +228,24 @@ const app = {
         document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
     },
 
-    // 영수증 렌더링
     renderDriverReceipts: () => {
         const selectedMonth = document.getElementById('driverReceiptMonthFilter').value;
         const receipts = app.user.driverRecords?.receipts || [];
         const tbody = document.getElementById('tblDriverReceiptBody');
         tbody.innerHTML = '';
         
-        let validReceipts = receipts.filter(r => new Date(r.date).toLocaleDateString('sv-SE').substring(0, 7) === selectedMonth);
+        let validReceipts = receipts.filter(r => app.formatDateStr(r.date).substring(0, 7) === selectedMonth);
         if(validReceipts.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3">해당 월 영수증 내역이 없습니다.</td></tr>'; return; }
         
         validReceipts.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(r => {
             const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0">영수증 보기</a>` : `-`;
-            const dateStr = new Date(r.date).toLocaleDateString('sv-SE');
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="small">${dateStr}</td>
+                <td class="small">${app.formatDateStr(r.date)}</td>
                 <td class="small text-muted">${app.escapeXSS(r.company)}</td>
                 <td class="fw-bold text-primary">${Number(r.amount).toLocaleString()} 원</td>
                 <td class="text-center">${evidenceBtn}</td>
-                <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyReceipt('${dateStr}', '${app.escapeXSS(r.company)}', ${r.amount})">삭제</button></td>
+                <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyReceipt('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}', ${r.amount})">삭제</button></td>
             `;
             tbody.appendChild(tr);
         });
@@ -255,7 +264,7 @@ const app = {
     },
 
     deleteMyReceipt: async (dateStr, company, amount) => {
-        if(!confirm(`해당 영수증을 삭제하시겠습니까?`)) return;
+        if(!confirm(`해당 주유 영수증을 삭제하시겠습니까?`)) return;
         app.showLoading(true);
         const res = await app.fetchAPI({ action: 'deleteReceipt', date: dateStr, phone: app.user.phone, company: company, amount: amount });
         if(res) {
@@ -284,10 +293,9 @@ const app = {
         const company = document.getElementById('inputCompany').value;
         const fileInput = document.getElementById('inputEvidence');
 
-        if (!company) return alert('기입 가능한 소속 화주사가 없습니다.');
-        if (isNaN(distance) || distance <= 0) return alert('운행 후 계기판이 운행 전보다 커야 합니다.');
+        if (isNaN(distance) || distance <= 0) return alert('도착 계기판 숫자가 출발보다 작거나 같습니다.');
 
-        submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 처리중...';
+        submitBtn.disabled = true; submitBtn.innerHTML = '처리중...';
         app.showLoading(true);
 
         const payload = {
@@ -305,24 +313,21 @@ const app = {
 
         let res = await app.fetchAPI(payload);
         if (res === null) {
-            if (confirm('해당 날짜에 이미 기록이 존재합니다.\n입력하신 거리로 덮어쓰기 수정하시겠습니까?')) {
-                payload.isUpdate = true;
-                res = await app.fetchAPI(payload);
+            if (confirm('해당 날짜에 이미 기록이 존재합니다. 덮어쓰시겠습니까?')) {
+                payload.isUpdate = true; res = await app.fetchAPI(payload);
             }
         }
 
         if (res) {
-            alert('운행기록이 저장되었습니다.');
+            alert('기록 저장이 완료되었습니다.');
             app.cancelDriverEdit(); 
             const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
             app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
             app.renderDriverRecords(); 
         }
-        app.showLoading(false);
-        submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> 등록하기';
+        app.showLoading(false); submitBtn.disabled = false; submitBtn.innerHTML = '등록하기';
     },
 
-    // ⭐️ 영수증 전용 폼 제출 로직
     handleReceiptSubmit: async (e) => {
         e.preventDefault();
         const submitBtn = document.getElementById('btnSubmitReceipt');
@@ -331,13 +336,9 @@ const app = {
         const amount = parseInt(document.getElementById('rInputAmount').value, 10);
         const fileInput = document.getElementById('rInputEvidence');
 
-        if (!company) return alert('화주사가 선택되지 않았습니다.');
-        if (isNaN(amount) || amount <= 0) return alert('금액을 올바르게 입력하세요.');
-        if (fileInput.files.length === 0) return alert('영수증 사진을 첨부하세요.');
+        if (isNaN(amount) || amount <= 0) return alert('금액을 바르게 입력하세요.');
 
-        submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 업로드중...';
-        app.showLoading(true);
-
+        submitBtn.disabled = true; app.showLoading(true);
         const payload = {
             action: 'saveReceipt', date, amount, phone: app.user.phone,
             name: app.user.name, car_number: app.user.car_number, company: company,
@@ -349,14 +350,11 @@ const app = {
             alert('주유 영수증이 등록되었습니다.');
             document.getElementById('rInputAmount').value = '';
             document.getElementById('rInputEvidence').value = '';
-            document.getElementById('driverReceiptMonthFilter').value = date.substring(0, 7);
-            
             const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
             app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
             app.renderDriverReceipts(); 
         }
-        app.showLoading(false);
-        submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> 영수증 등록하기';
+        app.showLoading(false); submitBtn.disabled = false;
     },
 
     loadAdminDashboardData: async () => {
@@ -364,10 +362,13 @@ const app = {
         const data = await app.fetchAPI({ action: 'getAdminData', role: app.user.role, company: app.user.company });
         app.showLoading(false);
         if (data) {
-            app.rawDb = data; app.populateAdminCompanyFilter(); app.refreshAdminViews();
+            app.rawDb = data; 
+            app.populateAdminCompanyFilter(); 
+            app.refreshAdminViews();
             document.getElementById('searchDailyMonth').value = new Date().toISOString().substring(0, 7);
             document.getElementById('searchReceiptMonth').value = new Date().toISOString().substring(0, 7);
-            app.applyDailySearch(); app.applyReceiptSearch();
+            app.applyDailySearch(); 
+            app.applyReceiptSearch();
         }
     },
 
@@ -375,32 +376,32 @@ const app = {
         const selectEl = document.getElementById('adminCompanyFilter');
         const searchComp1 = document.getElementById('searchMonthlyCompany');
         const searchComp2 = document.getElementById('searchReceiptCompany');
-        
         const companies = new Set((app.rawDb.masterCompanies || []).map(c => c.name));
-        app.rawDb.drivers.forEach(d => { if(d.company) d.company.split(',').forEach(c => companies.add(c.trim())); });
         
         if (app.user.role === 'admin') {
-            document.getElementById('adminRoleBadge').classList.add('d-none');
-            selectEl.classList.remove('d-none');
-            let opts = '<option value="ALL">전체 화주사 조회</option>';
+            let opts = '<option value="ALL">전체 화주사 통합 조회</option>';
             Array.from(companies).filter(c=>c).sort().forEach(c => opts += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`);
-            selectEl.innerHTML = opts; searchComp1.innerHTML = opts; searchComp2.innerHTML = opts;
-            app.currentAdminCompanyFilter = selectEl.value || 'ALL';
+            if(selectEl) selectEl.innerHTML = opts; 
+            if(searchComp1) searchComp1.innerHTML = opts; 
+            if(searchComp2) searchComp2.innerHTML = opts;
+            app.currentAdminCompanyFilter = selectEl?.value || 'ALL';
         } else {
-            selectEl.classList.add('d-none');
-            document.getElementById('adminRoleBadge').classList.remove('d-none');
-            document.getElementById('adminRoleBadge').innerText = `매니저 (${app.user.company})`;
+            if(selectEl) selectEl.classList.add('d-none');
             app.currentAdminCompanyFilter = app.user.company; 
-            searchComp1.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`;
-            searchComp2.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`;
-            searchComp1.setAttribute('disabled', 'true'); searchComp2.setAttribute('disabled', 'true');
+            if(searchComp1) { searchComp1.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`; searchComp1.setAttribute('disabled', 'true'); }
+            if(searchComp2) { searchComp2.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`; searchComp2.setAttribute('disabled', 'true'); }
         }
     },
 
     refreshAdminViews: () => {
-        if(app.user.role === 'admin') app.currentAdminCompanyFilter = document.getElementById('adminCompanyFilter').value || 'ALL';
-        app.calculateSummaryStats(); app.renderDriversTable(); 
-        app.applyDailySearch(); app.applyReceiptSearch();
+        if(app.user.role === 'admin') {
+            const filterEl = document.getElementById('adminCompanyFilter');
+            if(filterEl) app.currentAdminCompanyFilter = filterEl.value || 'ALL';
+        }
+        app.calculateSummaryStats(); 
+        app.renderDriversTable(); 
+        app.applyDailySearch(); 
+        app.applyReceiptSearch();
     },
 
     matchCompany: (itemCompany) => {
@@ -411,133 +412,232 @@ const app = {
     calculateSummaryStats: () => {
         const todayStr = new Date().toLocaleDateString('sv-SE');
         const monthStr = todayStr.substring(0, 7);
-        const validMileages = app.rawDb.mileages.filter(m => app.matchCompany(m.company));
+        const validMileages = app.rawDb.mileages || [];
 
-        const tRec = validMileages.filter(r => r.date.startsWith(todayStr));
-        document.getElementById('vTodayDrivers').innerText = `${new Set(tRec.map(r=>r.phone)).size}명`;
-        document.getElementById('vTodayDist').innerText = `${tRec.reduce((s,r)=>s+Number(r.distance),0).toLocaleString()} km`;
-        document.getElementById('vTodayCost').innerText = `${tRec.reduce((s,r)=>s+Number(r.fuel_cost),0).toLocaleString()} 원`;
+        const tRec = validMileages.filter(r => app.formatDateStr(r.date) === todayStr);
+        const mRec = validMileages.filter(r => app.formatDateStr(r.date).startsWith(monthStr));
+
+        const todayDrivers = new Set(tRec.map(r=>r.phone)).size;
+        const todayDist = tRec.reduce((s,r)=>s+Number(r.distance),0);
+        const todayCost = tRec.reduce((s,r)=>s+Number(r.fuel_cost),0);
+
+        const monthDrivers = new Set(mRec.map(r=>r.phone)).size;
+        const monthDist = mRec.reduce((s,r)=>s+Number(r.distance),0);
+        const monthCost = mRec.reduce((s,r)=>s+Number(r.fuel_cost),0);
+        const totalDrivers = (app.rawDb.drivers || []).filter(d => d.role === 'driver').length;
+
+        if (document.getElementById('vTodayDrivers')) document.getElementById('vTodayDrivers').innerText = `${todayDrivers}명`;
+        if (document.getElementById('vTodayDist')) document.getElementById('vTodayDist').innerText = `${todayDist.toLocaleString()} km`;
+        if (document.getElementById('vTodayCost')) document.getElementById('vTodayCost').innerText = `${todayCost.toLocaleString()} 원`;
+        if (document.getElementById('vTotalDrivers')) document.getElementById('vTotalDrivers').innerText = `${totalDrivers}명`;
+        if (document.getElementById('vMonthDrivers')) document.getElementById('vMonthDrivers').innerText = `${monthDrivers}명`;
+        if (document.getElementById('vMonthDist')) document.getElementById('vMonthDist').innerText = `${monthDist.toLocaleString()} km`;
+        if (document.getElementById('vMonthCost')) document.getElementById('vMonthCost').innerText = `${monthCost.toLocaleString()} 원`;
+    },
+
+    renderDriversTable: () => {
+        const tbody = document.getElementById('tblDriversBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        const drivers = (app.rawDb.drivers || []).filter(d => d.role === 'driver' && app.matchCompany(d.company));
+        if(drivers.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">등록된 기사가 없습니다.</td></tr>'; return; }
+
+        drivers.forEach(d => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="fw-bold text-dark">${app.escapeXSS(d.name)}</td>
+                <td>${app.escapeXSS(d.phone)}</td>
+                <td><span class="badge bg-light text-dark border">${app.escapeXSS(d.car_number)}</span></td>
+                <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(d.company) || '미배정'}</span></td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary btn-mgr-lock" onclick="app.openEditDriverModal('${d.phone}')">수정</button>
+                        <button class="btn btn-outline-danger btn-mgr-lock" onclick="app.deleteDriverProcess('${d.phone}', '${d.name}')">삭제</button>
+                        <button class="btn btn-outline-warning" onclick="app.resetDriverPasswordProcess('${d.phone}', '${d.name}')">비번초기화</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
     },
 
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
         const fKeyword = document.getElementById('searchDailyKeyword').value.trim().toLowerCase();
+        const tbody = document.getElementById('tblDailyRecordsBody');
+        if(!tbody) return;
 
-        const filtered = app.rawDb.mileages.filter(r => {
+        app.filteredDailyMileages = (app.rawDb.mileages || []).filter(r => {
             if (!app.matchCompany(r.company)) return false; 
-            if (fMonth && !r.date.startsWith(fMonth)) return false;
+            const d = app.formatDateStr(r.date);
+            if (fMonth && !d.startsWith(fMonth)) return false;
             if (fKeyword && !String(r.name).toLowerCase().includes(fKeyword)) return false;
             return true;
         }).sort((a,b) => new Date(b.date) - new Date(a.date));
 
-        const tbody = document.getElementById('tblDailyRecordsBody');
         tbody.innerHTML = '';
-        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">결과가 없습니다.</td></tr>'; return; }
+        if(app.filteredDailyMileages.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">결과가 없습니다.</td></tr>'; return; }
 
-        filtered.forEach(r => {
-            let evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url.split(',')[0]}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill py-0 px-2">사진 보기</a>` : `-`;
+        app.filteredDailyMileages.forEach(r => {
+            let evidenceBtn = `-`;
+            if(r.evidence_url) {
+                evidenceBtn = r.evidence_url.split(',').map((url, idx) => `<a href="${url.trim()}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0 me-1">사진${idx+1}</a>`).join('');
+            }
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${r.date.substring(0,10)}</td>
+                <td>${app.formatDateStr(r.date)}</td>
                 <td class="fw-bold">${app.escapeXSS(r.name)}</td>
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
-                <td class="text-muted small">${r.start_distance} <i class="bi bi-arrow-right"></i> ${r.end_distance}</td>
+                <td class="text-muted small">${r.start_distance}km → ${r.end_distance}km</td>
                 <td class="fw-bold text-primary">${Number(r.distance).toLocaleString()} km</td>
                 <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
                 <td class="text-center">${evidenceBtn}</td>
-                <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.deleteDailyProcess('${r.date.substring(0,10)}', '${r.phone}', '${r.company}', '${r.name}')">삭제</button></td>
+                <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.deleteDailyProcess('${app.formatDateStr(r.date)}', '${r.phone}', '${r.company}', '${r.name}')">삭제</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    },
+
+    applyReceiptSearch: () => {
+        const fMonth = document.getElementById('searchReceiptMonth').value; 
+        const fCompany = document.getElementById('searchReceiptCompany')?.value || 'ALL'; 
+        const tbody = document.getElementById('tblAdminReceiptBody');
+        if(!tbody) return;
+
+        app.filteredAdminReceipts = (app.rawDb.receipts || []).filter(r => {
+            if (!app.matchCompany(r.company)) return false; 
+            if (fCompany !== 'ALL' && !String(r.company).includes(fCompany)) return false; 
+            if (fMonth && !app.formatDateStr(r.date).startsWith(fMonth)) return false;
+            return true;
+        }).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+        tbody.innerHTML = '';
+        if(app.filteredAdminReceipts.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">내역이 없습니다.</td></tr>'; return; }
+
+        app.filteredAdminReceipts.forEach(r => {
+            const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0">영수증 보기</a>` : `-`;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${app.formatDateStr(r.date)}</td>
+                <td class="fw-bold">${app.escapeXSS(r.name)}</td>
+                <td>${r.phone}</td>
+                <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
+                <td class="fw-bold text-primary">${Number(r.amount).toLocaleString()} 원</td>
+                <td class="text-center">${evidenceBtn}</td>
+                <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.adminDeleteReceipt('${app.formatDateStr(r.date)}', '${r.phone}', '${r.company}', ${r.amount})">삭제</button></td>
             `;
             tbody.appendChild(tr);
         });
     },
 
     deleteDailyProcess: async (dateStr, phone, company, name) => {
-        if(!confirm(`[${dateStr}] 운행 기록을 영구 삭제하시겠습니까?`)) return;
-        app.showLoading(true);
-        const res = await app.fetchAPI({ action: 'deleteDailyMileage', date: dateStr, phone, company });
-        if(res) app.loadAdminDashboardData();
-        app.showLoading(false);
-    },
-
-    // ⭐️ 관리자: 영수증 탭 조회
-    applyReceiptSearch: () => {
-        const fMonth = document.getElementById('searchReceiptMonth').value; 
-        const fCompany = document.getElementById('searchReceiptCompany')?.value || 'ALL'; 
-
-        const filtered = (app.rawDb.receipts || []).filter(r => {
-            if (!app.matchCompany(r.company)) return false; 
-            if (fCompany !== 'ALL' && !String(r.company).includes(fCompany)) return false; 
-            if (fMonth && !r.date.startsWith(fMonth)) return false;
-            return true;
-        }).sort((a,b) => new Date(b.date) - new Date(a.date));
-
-        const tbody = document.getElementById('tblAdminReceiptBody');
-        tbody.innerHTML = '';
-        if(filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">결과가 없습니다.</td></tr>'; return; }
-
-        filtered.forEach(r => {
-            const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill py-0 px-2"><i class="bi bi-receipt"></i> 영수증 확인</a>` : `-`;
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${r.date.substring(0,10)}</td>
-                <td class="fw-bold">${app.escapeXSS(r.name)}</td>
-                <td>${r.phone}</td>
-                <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
-                <td class="fw-bold text-primary">${Number(r.amount).toLocaleString()} 원</td>
-                <td class="text-center">${evidenceBtn}</td>
-                <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.adminDeleteReceipt('${r.date.substring(0,10)}', '${r.phone}', '${r.company}', ${r.amount})">삭제</button></td>
-            `;
-            tbody.appendChild(tr);
-        });
+        if(!confirm(`정말 ${name} 기사님의 기록을 삭제하시겠습니까?`)) return;
+        app.showLoading(true); await app.fetchAPI({ action: 'deleteDailyMileage', date: dateStr, phone, company });
+        app.loadAdminDashboardData();
     },
 
     adminDeleteReceipt: async (dateStr, phone, company, amount) => {
-        if(!confirm(`해당 영수증 내역을 완전히 삭제하시겠습니까?`)) return;
+        if(!confirm(`해당 주유 영수증을 삭제하시겠습니까?`)) return;
+        app.showLoading(true); await app.fetchAPI({ action: 'deleteReceipt', date: dateStr, phone: phone, company: company, amount: amount });
+        app.loadAdminDashboardData();
+    },
+
+    openAddDriverModal: () => {
+        document.getElementById('mdlDriverTitle').innerText = "기사 신규 등록";
+        document.getElementById('hdnEditOriginPhone').value = "";
+        document.getElementById('mDriverName').value = ""; document.getElementById('mDriverPhone').value = ""; document.getElementById('mDriverCar').value = "";
+        const compInput = document.getElementById('mDriverCompany');
+        if(compInput) {
+            let opts = '';
+            (app.rawDb.masterCompanies || []).forEach(c => opts += `<option value="${c.name}">${c.name}</option>`);
+            compInput.innerHTML = opts;
+        }
+        new bootstrap.Modal(document.getElementById('mdlDriver')).show();
+    },
+
+    openEditDriverModal: (phone) => {
+        const d = (app.rawDb.drivers || []).find(x => x.phone == phone);
+        if(!d) return;
+        document.getElementById('mdlDriverTitle').innerText = `정보 수정 [${d.name}]`;
+        document.getElementById('hdnEditOriginPhone').value = d.phone;
+        document.getElementById('mDriverName').value = d.name;
+        document.getElementById('mDriverPhone').value = d.phone;
+        document.getElementById('mDriverCar').value = d.car_number;
+        const compInput = document.getElementById('mDriverCompany');
+        if(compInput) {
+            let opts = '';
+            (app.rawDb.masterCompanies || []).forEach(c => opts += `<option value="${c.name}" ${c.name === d.company ? 'selected':''}>${c.name}</option>`);
+            compInput.innerHTML = opts;
+        }
+        new bootstrap.Modal(document.getElementById('mdlDriver')).show();
+    },
+
+    handleDriverFormSubmit: async (e) => {
+        e.preventDefault();
+        const originPhone = document.getElementById('hdnEditOriginPhone').value;
+        const name = document.getElementById('mDriverName').value.trim();
+        const phone = document.getElementById('mDriverPhone').value.trim();
+        const car_number = document.getElementById('mDriverCar').value.trim();
+        const company = document.getElementById('mDriverCompany').value;
+
+        bootstrap.Modal.getInstance(document.getElementById('mdlDriver')).hide();
         app.showLoading(true);
-        const res = await app.fetchAPI({ action: 'deleteReceipt', date: dateStr, phone: phone, company: company, amount: amount });
-        if(res) app.loadAdminDashboardData();
-        app.showLoading(false);
+        if(!originPhone) {
+            await app.fetchAPI({ action: 'addDriver', name, phone, car_number, company, password_hash: '0000' });
+        } else {
+            await app.fetchAPI({ action: 'updateDriver', originPhone, name, phone, car_number, company });
+        }
+        app.loadAdminDashboardData();
+    },
+
+    resetDriverPasswordProcess: async (phone, name) => {
+        if(!confirm(`${name} 기사님의 암호를 0000으로 리셋하시겠습니까?`)) return;
+        app.showLoading(true); await app.fetchAPI({ action: 'resetPassword', phone, default_hash: '0000' });
+        app.loadAdminDashboardData();
+    },
+
+    deleteDriverProcess: async (phone, name) => {
+        if(!confirm(`${name} 기사님을 탈퇴 처리하시겠습니까?`)) return;
+        app.showLoading(true); await app.fetchAPI({ action: 'deleteDriver', phone });
+        app.loadAdminDashboardData();
+    },
+
+    renderCharts: () => {
+        const mileages = app.rawDb.mileages || [];
+        const dateMap = {};
+        mileages.forEach(m => {
+            const d = app.formatDateStr(m.date);
+            dateMap[d] = (dateMap[d] || 0) + (Number(m.distance) || 0);
+        });
+        const labels = Object.keys(dateMap).sort().slice(-7);
+        const vals = labels.map(l => dateMap[l]);
+        
+        const ctx = document.getElementById('cChart1')?.getContext('2d');
+        if(ctx) {
+            if(app.charts['cChart1']) app.charts['cChart1'].destroy();
+            app.charts['cChart1'] = new Chart(ctx, { type: 'line', data: { labels, datasets:[{ label:'주행량', data: vals, borderColor:'#4318ff', tension:0.3 }] } });
+        }
     },
 
     downloadDailyExcel: () => {
-        let htmlTable = `<table border="1"><thead><tr style="background-color:#f2f2f2;"><th>운행일자</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>출발계기판</th><th>도착계기판</th><th>주행거리(km)</th><th>유류비(원)</th><th>증빙URL</th></tr></thead><tbody>`;
-        app.filteredDailyMileages.forEach(r => { htmlTable += `<tr><td>${r.date.substring(0,10)}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.company}</td><td>${r.start_distance}</td><td>${r.end_distance}</td><td>${r.distance}</td><td>${r.fuel_cost}</td><td>${r.evidence_url}</td></tr>`; });
-        htmlTable += "</tbody></table>";
-        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([htmlTable], { type: 'application/vnd.ms-excel' }));
-        link.setAttribute("download", `운행기록_${new Date().toLocaleDateString('sv-SE')}.xls`);
-        link.click();
+        let html = `<table border="1"><thead><tr><th>날짜</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>출발계기판</th><th>도착계기판</th><th>실제거리</th><th>정산유류비</th></tr></thead><tbody>`;
+        (app.filteredDailyMileages || []).forEach(r => {
+            html += `<tr><td>${app.formatDateStr(r.date)}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.company}</td><td>${r.start_distance}</td><td>${r.end_distance}</td><td>${r.distance}</td><td>${r.fuel_cost}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([html], { type: 'application/vnd.ms-excel' }));
+        link.setAttribute("download", "일별운행기록.xls"); link.click();
     },
 
     downloadReceiptExcel: () => {
-        const filtered = (app.rawDb.receipts || []).filter(r => app.matchCompany(r.company));
-        let htmlTable = `<table border="1"><thead><tr style="background-color:#ffe0b2;"><th>결제일자</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>결제금액(원)</th><th>영수증URL</th></tr></thead><tbody>`;
-        filtered.forEach(r => { htmlTable += `<tr><td>${r.date.substring(0,10)}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.company}</td><td>${r.amount}</td><td>${r.evidence_url}</td></tr>`; });
-        htmlTable += "</tbody></table>";
-        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([htmlTable], { type: 'application/vnd.ms-excel' }));
-        link.setAttribute("download", `주유영수증_${new Date().toLocaleDateString('sv-SE')}.xls`);
-        link.click();
-    },
-
-    // 화주사 마스터 등 기타 유지
-    openCompanyModal: () => {
-        const ul = document.getElementById('ulMasterCompanies'); ul.innerHTML = '';
-        const comps = app.rawDb.masterCompanies || [];
-        comps.sort((a,b)=>a.name.localeCompare(b.name)).forEach(c => {
-            ul.innerHTML += `<li class="list-group-item bg-light border-0 rounded-3 p-3 mb-2"><div class="d-flex justify-content-between align-items-center"><span class="fw-bold">${app.escapeXSS(c.name)}</span><button class="btn btn-sm btn-white text-danger border" onclick="app.toggleCompanyStatusProcess('${c.name}', '${c.status}')">${c.status === 'active' ? '운영중 (클릭시 중단)' : '중단됨 (클릭시 재개)'}</button></div></li>`;
+        let html = `<table border="1"><thead><tr><th>날짜</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>금액</th></tr></thead><tbody>`;
+        (app.filteredAdminReceipts || []).forEach(r => {
+            html += `<tr><td>${app.formatDateStr(r.date)}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.company}</td><td>${r.amount}</td></tr>`;
         });
-        new bootstrap.Modal(document.getElementById('mdlCompany')).show();
-    },
-    addMasterCompany: async () => {
-        const input = document.getElementById('mNewCompanyName');
-        const cName = input.value.trim();
-        if(!cName) return;
-        app.showLoading(true); const res = await app.fetchAPI({ action: 'addMasterCompany', companyName: cName }); app.showLoading(false);
-        if(res) { input.value = ''; app.loadAdminDashboardData(); }
-    },
-    toggleCompanyStatusProcess: async (cName, currentStatus) => {
-        if(!confirm(`[${cName}] 상태를 변경하시겠습니까?`)) return;
-        app.showLoading(true); const res = await app.fetchAPI({ action: 'toggleCompanyStatus', companyName: cName, status: currentStatus }); app.showLoading(false);
-        if(res) app.loadAdminDashboardData();
+        html += '</tbody></table>';
+        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([html], { type: 'application/vnd.ms-excel' }));
+        link.setAttribute("download", "주유영수증내역.xls"); link.click();
     }
 };
 window.onload = app.init;
