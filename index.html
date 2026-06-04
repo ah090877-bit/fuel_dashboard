@@ -148,7 +148,6 @@
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-unsubmitted" data-bs-toggle="pill" data-bs-target="#pane-unsubmitted">미입력 현황</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-drivers" data-bs-toggle="pill" data-bs-target="#pane-drivers">기사 관리</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-daily" data-bs-toggle="pill" data-bs-target="#pane-lookup-daily">일별 운행 조회</button></li>
-            <!-- ⭐️ 탭 이름 '기간별 운행 요약' 으로 조금 더 명확하게 수정 -->
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-monthly" data-bs-toggle="pill" data-bs-target="#pane-lookup-monthly">기간별 운행 요약</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-receipts" data-bs-toggle="pill" data-bs-target="#pane-receipts">주유 영수증</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-fuelrate" data-bs-toggle="pill" data-bs-target="#pane-fuelrate">단가 관리</button></li>
@@ -156,12 +155,13 @@
 
         <div class="tab-content" id="adminTabContent">
             <div class="tab-pane fade show active" id="pane-dash">
-                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-sun-fill text-warning me-1"></i> 당일 운행 현황판</h6>
+                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-sun-fill text-warning me-1"></i> 당일 요약</h6>
                 <div class="row g-3 mb-4">
                     <div class="col-12 col-md-4"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-green-light me-3"><i class="bi bi-calendar-check-fill"></i></div><div><p class="text-muted mb-1 small fw-bold">오늘 활동 기사</p><h4 class="fw-bold mb-0 text-dark" id="vTodayDrivers">0명</h4></div></div></div>
                     <div class="col-12 col-md-4"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-purple-light me-3"><i class="bi bi-speedometer"></i></div><div><p class="text-muted mb-1 small fw-bold">오늘 총 운행거리</p><h4 class="fw-bold mb-0 text-dark" id="vTodayDist">0 km</h4></div></div></div>
                     <div class="col-12 col-md-4"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-orange-light me-3"><i class="bi bi-currency-exchange"></i></div><div><p class="text-muted mb-1 small fw-bold">오늘 총 유류비</p><h4 class="fw-bold mb-0 text-danger" id="vTodayCost">0 원</h4></div></div></div>
                 </div>
+                
                 <h6 class="fw-bold text-dark mb-3 mt-4"><i class="bi bi-calendar-month-fill text-primary me-1"></i> 당월 누적 현황판</h6>
                 <div class="row g-3 mb-4">
                     <div class="col-12 col-sm-6 col-xl-3"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-blue-light me-3"><i class="bi bi-people-fill"></i></div><div><p class="text-muted mb-1 small fw-bold">총 등록 기사</p><h4 class="fw-bold mb-0 text-dark" id="vTotalDrivers">0명</h4></div></div></div>
@@ -169,6 +169,94 @@
                     <div class="col-12 col-sm-6 col-xl-3"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-purple-light me-3"><i class="bi bi-signpost-split-fill"></i></div><div><p class="text-muted mb-1 small fw-bold">당월 누적 거리</p><h4 class="fw-bold mb-0 text-dark" id="vMonthDist">0 km</h4></div></div></div>
                     <div class="col-12 col-sm-6 col-xl-3"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-orange-light me-3"><i class="bi bi-piggy-bank-fill"></i></div><div><p class="text-muted mb-1 small fw-bold">당월 누적 유류비</p><h4 class="fw-bold mb-0 text-danger" id="vMonthCost">0 원</h4></div></div></div>
                 </div>
+
+                <div class="row g-4 mt-2">
+                    <div class="col-12 col-xl-6">
+                        <div class="dash-card h-100">
+                            <h6 class="fw-bold mb-3"><span class="badge bg-primary rounded-1 me-2 text-white"><i class="bi bi-robot"></i> AI</span> 1. 종합 진단</h6>
+                            <div id="aiAlertBox" class="p-4 mb-3 rounded-4 border text-center">
+                                <h5 class="fw-bold mb-2" id="aiAlertTitle">분석 중...</h5>
+                                <p class="mb-0 text-dark" id="aiAlertDesc">데이터를 불러오는 중입니다.</p>
+                            </div>
+                            <div class="d-flex justify-content-between text-center px-2 mt-4">
+                                <div class="border-end w-100 pe-2"><p class="text-muted small mb-1"><i class="bi bi-graph-up-arrow text-primary"></i> 최근 7일 대비</p><h4 class="fw-bold mb-0" id="ai7DayRate">-</h4><span class="badge bg-light text-dark mt-1" id="ai7DayBadge">-</span></div>
+                                <div class="border-end w-100 px-2"><p class="text-muted small mb-1"><i class="bi bi-person text-info"></i> 이상 사용 기사</p><h4 class="fw-bold mb-0" id="aiAbnormalCount">0명</h4><span class="badge bg-light text-dark mt-1" id="aiAbnormalBadge">-</span></div>
+                                <div class="w-100 ps-2"><p class="text-muted small mb-1"><i class="bi bi-calendar-week text-primary"></i> 요일 패턴</p><h5 class="fw-bold mb-0 text-dark mt-2" id="aiDayPattern">-</h5><span class="badge bg-warning text-dark mt-1">주의</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12 col-xl-6">
+                        <div class="dash-card h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0"><i class="bi bi-bell-fill text-warning me-1"></i> 2. 이상 유류비 감지</h6>
+                                <span class="badge bg-danger-subtle text-danger border border-danger rounded-pill px-3" id="abnormalBadgeTitle">위험 0건</span>
+                            </div>
+                            <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                                <table class="table table-sm align-middle text-center text-nowrap mb-0">
+                                    <thead style="position: sticky; top: 0; background: white; z-index: 1;">
+                                        <tr><th class="text-muted fw-bold pb-2">기사명</th><th class="text-muted fw-bold pb-2">최근 30일 평균</th><th class="text-muted fw-bold pb-2">오늘 사용</th><th class="text-muted fw-bold pb-2">증가율</th><th class="text-muted fw-bold pb-2">위험도</th></tr>
+                                    </thead>
+                                    <tbody id="abnormalDriverBody"></tbody>
+                                </table>
+                            </div>
+                            <div class="mt-3 bg-light p-2 rounded-2 text-center">
+                                <p class="text-muted small mb-0"><i class="bi bi-check-circle text-success"></i> 개인별 30일 평균 대비 30% 이상 초과 시 표시됩니다.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12 col-xl-6">
+                        <div class="dash-card h-100">
+                            <h6 class="fw-bold mb-4"><i class="bi bi-graph-up text-success me-1"></i> 3. 최근 7일 증감 분석</h6>
+                            <div class="row align-items-center">
+                                <div class="col-6">
+                                    <div class="p-3 bg-light rounded-3 mb-3">
+                                        <p class="text-muted small fw-bold mb-1">최근 7일 평균 유류비</p>
+                                        <h4 class="fw-bold text-dark mb-0" id="avg7DayCost">0원</h4>
+                                    </div>
+                                    <div class="p-3 bg-light rounded-3">
+                                        <p class="text-muted small fw-bold mb-1">오늘 전체 유류비</p>
+                                        <h4 class="fw-bold text-dark mb-0" id="todayCostDisp">0원</h4>
+                                    </div>
+                                    <div class="mt-3">
+                                        <span class="text-muted small fw-bold me-2">증감률</span>
+                                        <span class="badge fs-6 rounded-pill" id="increaseRateBadge">-</span>
+                                    </div>
+                                </div>
+                                <div class="col-6 text-center">
+                                    <div style="position: relative; height: 180px; width: 100%; display: flex; justify-content: center; align-items: center;">
+                                        <canvas id="cChartIncrease" style="position: absolute; z-index: 1;"></canvas>
+                                        <div style="position: absolute; z-index: 2; text-align: center;">
+                                            <h4 class="fw-bold mb-0" id="chartCenterText">-</h4>
+                                            <span class="small text-muted" id="chartCenterSub">변동</span>
+                                        </div>
+                                    </div>
+                                    <p class="text-muted small mt-2 mb-0">최근 7일 대비 오늘</p>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-center gap-3 mt-4 border-top pt-3">
+                                <span class="small"><i class="bi bi-circle-fill text-success"></i> 0~15% 정상</span>
+                                <span class="small"><i class="bi bi-circle-fill text-warning"></i> 15~30% 주의</span>
+                                <span class="small"><i class="bi bi-circle-fill" style="color: #fd7e14;"></i> 30~50% 경고</span>
+                                <span class="small"><i class="bi bi-circle-fill text-danger"></i> 50% 이상 위험</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12 col-xl-6">
+                        <div class="dash-card h-100 d-flex flex-column">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-bar-chart-line-fill text-primary me-1"></i> 4. 요일별 평균 유류비 <span class="text-muted small fw-normal">(최근 8주 기준)</span></h6>
+                            <div style="position: relative; flex-grow: 1; min-height: 200px; width: 100%;">
+                                <canvas id="cChartWeekday"></canvas>
+                            </div>
+                            <div class="mt-3 p-3 bg-primary-subtle rounded-3 text-center border border-primary-subtle">
+                                <p class="mb-0 small text-primary fw-bold" id="weekdayInsightText"><i class="bi bi-info-circle-fill me-1"></i> 데이터를 분석 중입니다.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <div class="tab-pane fade" id="pane-unsubmitted">
@@ -191,7 +279,6 @@
                 </div>
             </div>
 
-            <!-- ⭐️ 일별 운행 조회 필터 영역에 시작/종료일 나란히 추가 -->
             <div class="tab-pane fade" id="pane-lookup-daily">
                 <div class="dash-card mb-4">
                     <div class="row g-2 mb-3 align-items-end">
@@ -216,7 +303,6 @@
                 </div>
             </div>
 
-            <!-- ⭐️ 월별 요약 필터 영역에서 화주사를 지우고, 시작/종료일 추가 -->
             <div class="tab-pane fade" id="pane-lookup-monthly">
                 <div class="dash-card mb-4">
                     <div class="row g-2 mb-3 align-items-end">
@@ -294,6 +380,7 @@
     <div class="modal fade" id="mdlFuelRate" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content shadow rounded-4 border-0"><form id="frmFuelRate"><div class="modal-body p-4 text-center"><h6 class="fw-bold mb-4">단가 설정 / 수정</h6><label class="form-label small fw-bold text-muted mb-1 text-start d-block">적용 월</label><input type="month" class="form-control mb-3 fw-bold" id="mFuelRateMonth" required><label class="form-label small fw-bold text-muted mb-1 text-start d-block">대상 화주사</label><select class="form-select mb-3 fw-bold text-primary" id="mFuelRateCompany"></select><label class="form-label small fw-bold text-muted mb-1 text-start d-block">1km 당 금액(원)</label><input type="number" class="form-control fw-bold text-danger" id="mFuelRateVal" required></div><div class="modal-footer"><button type="submit" class="btn btn-primary w-100">설정 및 기존 기록 일괄 재계산</button></div></form></div></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
