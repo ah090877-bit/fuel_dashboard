@@ -1,3 +1,4 @@
+// 🚨 알려주신 구글 웹앱 주소 세팅 완료
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF3a9lj-9LjmXp1ZTk-yL97znfSniJ1_kixxVuDl0Hjar0/exec';
 
 const app = {
@@ -123,9 +124,8 @@ const app = {
         return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     },
 
-    // ⭐️ 스마트폰 고용량 사진 압축 엔진 (용량 초과 방지)
     compressImage: async (file) => {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = (event) => {
@@ -133,7 +133,7 @@ const app = {
                 img.src = event.target.result;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1000; // 가로 1000픽셀로 줄임 (화질유지, 용량 1/10)
+                    const MAX_WIDTH = 800; 
                     let width = img.width;
                     let height = img.height;
                     if (width > MAX_WIDTH) {
@@ -144,9 +144,11 @@ const app = {
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]); 
-                }
+                    resolve(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]); 
+                };
+                img.onerror = () => reject(new Error('이미지 처리 실패'));
             };
+            reader.onerror = () => reject(new Error('파일 읽기 실패'));
         });
     },
 
@@ -156,13 +158,14 @@ const app = {
             const response = await fetch(GAS_URL, {
                 method: 'POST',
                 body: JSON.stringify(payload),
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                redirect: 'follow' 
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.message);
             return result.data;
         } catch (error) {
-            alert(error.message);
+            alert("서버 연결 오류: " + error.message);
             return null;
         } finally { 
             app.showLoading(false);
@@ -213,7 +216,7 @@ const app = {
     },
 
     initDriverView: () => {
-        app.cancelDriverEdit(); // 화면 진입 시 수정모드 초기화
+        app.cancelDriverEdit(); 
         document.getElementById('driverGreeting').innerHTML = `이름: <b class="text-primary">${app.escapeXSS(app.user.name)}</b> 기사님`;
         document.getElementById('driverCarBadge').innerText = app.escapeXSS(app.user.car_number);
 
@@ -236,7 +239,6 @@ const app = {
         app.renderDriverRecords();
     },
 
-    // ⭐️ 기사님 상세 기록 렌더링 (보기 버튼 및 수정 버튼 추가)
     renderDriverRecords: () => {
         const selectedMonth = document.getElementById('driverMonthFilter').value;
         const records = app.user.driverRecords || [];
@@ -285,7 +287,6 @@ const app = {
         document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
     },
 
-    // ⭐️ 기사 본인 데이터 수정 세팅 기능
     setupDriverEdit: (date, company, distance) => {
         document.getElementById('inputDate').value = date;
         document.getElementById('inputCompany').value = company;
@@ -322,7 +323,6 @@ const app = {
         document.getElementById('btnCancelEdit').classList.add('d-none');
     },
 
-    // ⭐️ 기사용 운행기록 제출 (사진 압축 및 필수 입력 검증)
     handleMileageSubmit: async (e) => {
         e.preventDefault();
         const date = document.getElementById('inputDate').value;
@@ -334,7 +334,6 @@ const app = {
         if (!company) return alert('기입 가능한 소속 화주사가 없습니다. 관리자에게 문의하세요.');
         if (isNaN(distance) || distance <= 0) return alert('주행거리를 올바르게 입력하세요.');
 
-        // ⭐️ 사진 첨부 필수 검증 (새로운 등록일 때만)
         if (!isEditMode && fileInput.files.length === 0) {
             return alert('계기판이나 영수증 등 증빙 사진을 반드시 첨부해 주셔야 등록이 가능합니다.');
         }
@@ -347,17 +346,20 @@ const app = {
         };
 
         if (fileInput.files.length > 0) {
-            const file = fileInput.files[0];
-            payload.mimeType = "image/jpeg"; // 압축 후엔 무조건 jpeg
-            app.showLoading(true); 
-            // ⭐️ 용량 초과 방지를 위한 스마트폰 고화질 압축 실행
-            payload.fileBase64 = await app.compressImage(file);
-            app.showLoading(false);
+            try {
+                const file = fileInput.files[0];
+                payload.mimeType = "image/jpeg"; 
+                app.showLoading(true); 
+                payload.fileBase64 = await app.compressImage(file);
+                app.showLoading(false);
+            } catch (err) {
+                app.showLoading(false);
+                return alert("사진 처리 중 오류가 발생했습니다. 다른 사진을 선택해 주세요.");
+            }
         }
 
         let res = await app.fetchAPI(payload);
         
-        // 만약 새로 등록인 줄 알았는데 이미 데이터가 있는 경우 (날짜 중복)
         if (res === null) {
             if (confirm('해당 날짜, 해당 화주사에 이미 기록이 존재합니다.\n입력하신 거리(및 증빙)로 덮어쓰기 수정하시겠습니까?')) {
                 payload.isUpdate = true;
