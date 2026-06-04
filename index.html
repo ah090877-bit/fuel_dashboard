@@ -41,74 +41,92 @@
         </div>
     </div>
 
-    <div id="view-change-password" class="container view-section d-none">
-        <div class="row justify-content-center align-items-center vh-100">
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="card shadow border-danger rounded-4">
-                    <div class="card-body p-4">
-                        <h4 class="text-center text-danger fw-bold mb-3"><i class="bi bi-shield-exclamation"></i> 암호 변경 필수</h4>
-                        <p class="text-muted text-center small mb-4">보안을 위해 초기 암호(0000)를 변경해야 합니다.</p>
-                        <form id="changePasswordForm">
-                            <div class="mb-3"><label class="form-label small fw-bold">새 비밀번호 (숫자 4자리)</label><input type="password" class="form-control form-control-lg" id="newPw" pattern="\d{4}" maxlength="4" required></div>
-                            <div class="mb-4"><label class="form-label small fw-bold">새 비밀번호 확인</label><input type="password" class="form-control form-control-lg" id="newPwConfirm" pattern="\d{4}" maxlength="4" required></div>
-                            <button type="submit" class="btn btn-danger w-100 btn-lg shadow">변경 및 재로그인 하기</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div id="view-driver" class="container view-section d-none py-4">
         <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-3 shadow-sm">
             <div><h5 class="fw-bold mb-1 text-dark" id="driverGreeting">안녕하세요</h5><span class="badge bg-success" id="driverCarBadge">차량정보</span></div>
             <button class="btn btn-sm btn-outline-danger px-3 rounded-pill" onclick="app.logout()">로그아웃</button>
         </div>
 
-        <div class="card shadow-sm border-0 rounded-4 mb-4">
-            <div class="card-body p-4">
-                <h5 class="fw-bold mb-4 text-primary" id="driverFormTitle"><i class="bi bi-pencil-square"></i> 주행거리 기록 및 증빙</h5>
-                <form id="mileageForm">
-                    <input type="hidden" id="hdnDriverEditMode" value="false">
+        <ul class="nav nav-pills mb-3 gap-2 bg-white p-2 rounded-3 shadow-sm border-0" id="driverTabs" role="tablist">
+            <li class="nav-item flex-fill text-center"><button class="nav-link w-100 active fw-bold" id="dtab-mileage" data-bs-toggle="pill" data-bs-target="#dpane-mileage">운행 기록</button></li>
+            <li class="nav-item flex-fill text-center"><button class="nav-link w-100 fw-bold" id="dtab-receipt" data-bs-toggle="pill" data-bs-target="#dpane-receipt">주유 영수증</button></li>
+        </ul>
 
-                    <div class="row g-2 mb-3">
-                        <div class="col-6"><label class="form-label small fw-bold">운행 날짜</label><input type="date" class="form-control form-control-lg" id="inputDate" required></div>
-                        <div class="col-6"><label class="form-label small fw-bold">소속 화주사</label><select class="form-select form-control-lg fw-bold text-primary" id="inputCompany" required></select></div>
+        <div class="tab-content" id="driverTabContent">
+            <div class="tab-pane fade show active" id="dpane-mileage">
+                <div class="card shadow-sm border-0 rounded-4 mb-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-4 text-primary" id="driverFormTitle"><i class="bi bi-pencil-square"></i> 주행거리 자동 계산</h5>
+                        <form id="mileageForm">
+                            <input type="hidden" id="hdnDriverEditMode" value="false">
+                            <div class="row g-2 mb-3">
+                                <div class="col-6"><label class="form-label small fw-bold">운행 날짜</label><input type="date" class="form-control form-control-lg" id="inputDate" required></div>
+                                <div class="col-6"><label class="form-label small fw-bold">소속 화주사</label><select class="form-select form-control-lg fw-bold text-primary" id="inputCompany" required></select></div>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6"><label class="form-label small fw-bold text-muted">출발 전 계기판</label><input type="number" class="form-control" id="inputStartDist" placeholder="예: 50000" required></div>
+                                <div class="col-6"><label class="form-label small fw-bold text-muted">운행 후 계기판</label><input type="number" class="form-control" id="inputEndDist" placeholder="예: 50120" required></div>
+                            </div>
+                            <div class="mb-3"><label class="form-label small fw-bold text-primary">실제 운행거리 (km)</label><input type="number" class="form-control form-control-lg text-primary fw-bold bg-light border-primary" id="inputDistance" readonly required placeholder="자동 계산됨"></div>
+                            
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-danger" id="lblEvidence"><i class="bi bi-camera-fill"></i> 운행 증빙 (최대 4장)</label>
+                                <input type="file" class="form-control" id="inputEvidence" accept="image/*" multiple>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-secondary btn-lg py-3 rounded-3 shadow w-25 d-none" id="btnCancelEdit" onclick="app.cancelDriverEdit()">취소</button>
+                                <button type="submit" class="btn btn-success btn-lg py-3 rounded-3 shadow w-100" id="btnSubmitMileage"><i class="bi bi-cloud-arrow-up"></i> 등록하기</button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="mb-3"><label class="form-label small fw-bold">주행거리 (km)</label><input type="number" class="form-control form-control-lg" id="inputDistance" placeholder="숫자만 입력해 주세요" required></div>
-                    
-                    <div class="mb-4">
-                        <label class="form-label small fw-bold text-danger" id="lblEvidence"><i class="bi bi-camera-fill"></i> 계기판/영수증 증빙 (최대 4장)</label>
-                        <input type="file" class="form-control form-control-lg" id="inputEvidence" accept="image/*" multiple>
-                        <small class="text-muted" id="txtEvidenceHelp">최초 등록 시 사진 첨부는 필수입니다. (최대 4장)</small>
-                    </div>
+                </div>
 
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-secondary btn-lg py-3 rounded-3 shadow w-25 d-none" id="btnCancelEdit" onclick="app.cancelDriverEdit()">취소</button>
-                        <button type="submit" class="btn btn-success btn-lg py-3 rounded-3 shadow w-100" id="btnSubmitMileage"><i class="bi bi-cloud-arrow-up"></i> 등록하기</button>
+                <div class="d-flex justify-content-between align-items-end mb-2">
+                    <h6 class="fw-bold text-dark mb-0">내 운행 기록 내역</h6>
+                    <input type="month" id="driverMonthFilter" class="form-control form-control-sm w-auto d-inline-block">
+                </div>
+
+                <div class="dash-card bg-white mb-4">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-modern table-hover align-middle text-nowrap">
+                            <thead><tr><th>날짜</th><th>화주사</th><th>시작/종료</th><th>거리</th><th>정산비</th><th>증빙</th><th class="text-center">관리</th></tr></thead>
+                            <tbody id="tblDriverMonthBody"></tbody>
+                        </table>
                     </div>
-                </form>
+                </div>
             </div>
-        </div>
 
-        <div class="d-flex justify-content-between align-items-end mb-2">
-            <h6 class="fw-bold text-dark mb-0">내 운행 기록 상세 내역</h6>
-            <input type="month" id="driverMonthFilter" class="form-control form-control-sm w-auto d-inline-block">
-        </div>
-
-        <div class="dash-card bg-white mb-4">
-            <div class="table-responsive">
-                <table class="table table-sm table-modern table-hover align-middle text-nowrap">
-                    <thead><tr><th>날짜</th><th>화주사</th><th>거리</th><th>정산비</th><th>증빙</th><th class="text-center">관리</th></tr></thead>
-                    <tbody id="tblDriverMonthBody"></tbody>
-                </table>
+            <div class="tab-pane fade" id="dpane-receipt">
+                <div class="card shadow-sm border-0 rounded-4 mb-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-receipt"></i> 주유 영수증 개별 등록</h5>
+                        <form id="receiptForm">
+                            <div class="row g-2 mb-3">
+                                <div class="col-6"><label class="form-label small fw-bold">결제 날짜</label><input type="date" class="form-control form-control-lg" id="rInputDate" required></div>
+                                <div class="col-6"><label class="form-label small fw-bold">소속 화주사</label><select class="form-select form-control-lg fw-bold text-primary" id="rInputCompany" required></select></div>
+                            </div>
+                            <div class="mb-3"><label class="form-label small fw-bold">주유 금액 (원)</label><input type="number" class="form-control form-control-lg" id="rInputAmount" placeholder="예: 50000" required></div>
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-danger"><i class="bi bi-camera-fill"></i> 영수증 사진 (필수, 1장)</label>
+                                <input type="file" class="form-control" id="rInputEvidence" accept="image/*" required>
+                            </div>
+                            <button type="submit" class="btn btn-warning text-dark fw-bold w-100 btn-lg py-3 rounded-3 shadow" id="btnSubmitReceipt"><i class="bi bi-cloud-arrow-up"></i> 영수증 등록하기</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-end mb-2">
+                    <h6 class="fw-bold text-dark mb-0">내 주유 영수증 내역</h6>
+                    <input type="month" id="driverReceiptMonthFilter" class="form-control form-control-sm w-auto d-inline-block">
+                </div>
+                <div class="dash-card bg-white mb-4">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-modern table-hover align-middle text-nowrap">
+                            <thead><tr><th>날짜</th><th>화주사</th><th>주유금액</th><th>영수증</th><th class="text-center">관리</th></tr></thead>
+                            <tbody id="tblDriverReceiptBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-        </div>
-
-        <div class="row g-3 mb-4">
-            <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 거리</p><h6 class="fw-bold mb-0 text-primary" id="dStatDistance">0 km</h6></div></div>
-            <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 유류비</p><h6 class="fw-bold mb-0 text-danger" id="dStatCost">0 원</h6></div></div>
-            <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">운행 일수</p><h6 class="fw-bold mb-0 text-dark" id="dStatDays">0일</h6></div></div>
         </div>
     </div>
 
@@ -131,9 +149,9 @@
             <li class="nav-item"><button class="nav-link active rounded-2" id="tab-dash" data-bs-toggle="pill" data-bs-target="#pane-dash">통계 대시보드</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-unsubmitted" data-bs-toggle="pill" data-bs-target="#pane-unsubmitted">미입력 현황</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-drivers" data-bs-toggle="pill" data-bs-target="#pane-drivers">기사 관리</button></li>
-            <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-daily" data-bs-toggle="pill" data-bs-target="#pane-lookup-daily">일별 상세 조회</button></li>
-            <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-monthly" data-bs-toggle="pill" data-bs-target="#pane-lookup-monthly">월별 기사 요약</button></li>
-            <li class="nav-item"><button class="nav-link rounded-2" id="tab-history" data-bs-toggle="pill" data-bs-target="#pane-history">수정 이력</button></li>
+            <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-daily" data-bs-toggle="pill" data-bs-target="#pane-lookup-daily">일별 운행 조회</button></li>
+            <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-monthly" data-bs-toggle="pill" data-bs-target="#pane-lookup-monthly">월별 운행 요약</button></li>
+            <li class="nav-item"><button class="nav-link rounded-2 bg-warning text-dark fw-bold border" id="tab-receipts" data-bs-toggle="pill" data-bs-target="#pane-receipts">주유 영수증</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-fuelrate" data-bs-toggle="pill" data-bs-target="#pane-fuelrate">단가 관리</button></li>
         </ul>
 
@@ -145,17 +163,6 @@
                     <div class="col-12 col-md-4"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-purple-light me-3"><i class="bi bi-speedometer"></i></div><div><p class="text-muted mb-1 small fw-bold">오늘 총 운행거리</p><h4 class="fw-bold mb-0 text-dark" id="vTodayDist">0 km</h4></div></div></div>
                     <div class="col-12 col-md-4"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-orange-light me-3"><i class="bi bi-currency-exchange"></i></div><div><p class="text-muted mb-1 small fw-bold">오늘 총 유류비</p><h4 class="fw-bold mb-0 text-danger" id="vTodayCost">0 원</h4></div></div></div>
                 </div>
-                <h6 class="fw-bold text-dark mb-3 mt-5"><i class="bi bi-calendar-month-fill text-primary me-1"></i> 당월 누적 현황판</h6>
-                <div class="row g-3 mb-4">
-                    <div class="col-12 col-sm-6 col-xl-3"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-blue-light me-3"><i class="bi bi-people-fill"></i></div><div><p class="text-muted mb-1 small fw-bold">총 등록 기사</p><h4 class="fw-bold mb-0 text-dark" id="vTotalDrivers">0명</h4></div></div></div>
-                    <div class="col-12 col-sm-6 col-xl-3"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-green-light me-3"><i class="bi bi-check-circle-fill"></i></div><div><p class="text-muted mb-1 small fw-bold">당월 배차 기사</p><h4 class="fw-bold mb-0 text-dark" id="vMonthDrivers">0명</h4></div></div></div>
-                    <div class="col-12 col-sm-6 col-xl-3"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-purple-light me-3"><i class="bi bi-signpost-split-fill"></i></div><div><p class="text-muted mb-1 small fw-bold">당월 누적 거리</p><h4 class="fw-bold mb-0 text-dark" id="vMonthDist">0 km</h4></div></div></div>
-                    <div class="col-12 col-sm-6 col-xl-3"><div class="dash-card d-flex align-items-center p-3"><div class="icon-box bg-orange-light me-3"><i class="bi bi-piggy-bank-fill"></i></div><div><p class="text-muted mb-1 small fw-bold">당월 누적 유류비</p><h4 class="fw-bold mb-0 text-danger" id="vMonthCost">0 원</h4></div></div></div>
-                </div>
-                <div class="row g-4 mt-2">
-                    <div class="col-12 col-lg-6"><div class="dash-card"><h6 class="fw-bold mb-3">일별 운행거리 추이</h6><div class="chart-container"><canvas id="cChart1"></canvas></div></div></div>
-                    <div class="col-12 col-lg-6"><div class="dash-card"><h6 class="fw-bold mb-3">기사별 운행거리 순위</h6><div class="chart-container"><canvas id="cChart2"></canvas></div></div></div>
-                </div>
             </div>
 
             <div class="tab-pane fade" id="pane-unsubmitted">
@@ -164,12 +171,7 @@
                         <h5 class="fw-bold mb-0 text-danger"><i class="bi bi-exclamation-circle-fill"></i> 데이터 미입력 기사 명단</h5>
                         <input type="date" id="unsubmittedDateFilter" class="form-control form-control-sm w-auto fw-bold">
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-modern align-middle text-nowrap">
-                            <thead><tr><th>기사명</th><th>전화번호</th><th>차량번호</th><th>소속 화주사</th><th>상태</th></tr></thead>
-                            <tbody id="tblUnsubmittedBody"></tbody>
-                        </table>
-                    </div>
+                    <div class="table-responsive"><table class="table table-modern align-middle text-nowrap"><tbody id="tblUnsubmittedBody"></tbody></table></div>
                 </div>
             </div>
 
@@ -177,41 +179,28 @@
                 <div class="dash-card">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h5 class="fw-bold mb-0">소속 기사 명부</h5>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-primary btn-sm rounded-2 btn-mgr-lock" onclick="app.openAddDriverModal()">+ 기사 등록</button>
-                        </div>
+                        <button class="btn btn-primary btn-sm rounded-2 btn-mgr-lock" onclick="app.openAddDriverModal()">+ 기사 등록</button>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>기사명</th><th>전화번호</th><th>차량번호</th><th>화주사</th><th class="text-center">관리</th></tr></thead>
-                            <tbody id="tblDriversBody"></tbody>
-                        </table>
-                    </div>
+                    <div class="table-responsive"><table class="table table-modern align-middle table-hover text-nowrap"><thead><tr><th>기사명</th><th>전화번호</th><th>차량번호</th><th>화주사</th><th class="text-center">관리</th></tr></thead><tbody id="tblDriversBody"></tbody></table></div>
                 </div>
             </div>
 
             <div class="tab-pane fade" id="pane-lookup-daily">
                 <div class="dash-card mb-4">
-                    <h5 class="fw-bold mb-3">일별 상세 조건 검색</h5>
-                    <div class="row g-2">
-                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">조회 연월 선택</label><input type="month" class="form-control fw-bold" id="searchDailyMonth"></div>
-                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">특정 시작일 지정</label><input type="date" class="form-control fw-bold" id="searchDailyStart"></div>
-                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">특정 종료일 지정</label><input type="date" class="form-control fw-bold" id="searchDailyEnd"></div>
-                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">통합 검색어</label><input type="text" class="form-control" id="searchDailyKeyword" placeholder="기사명 또는 차량번호"></div>
-                    </div>
-                    <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button class="btn btn-secondary px-4 rounded-2" onclick="app.resetDailySearch()">초기화</button>
-                        <button class="btn btn-primary px-4 rounded-2" onclick="app.applyDailySearch()">조회하기</button>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">조회 연월</label><input type="month" class="form-control fw-bold" id="searchDailyMonth"></div>
+                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">통합 검색어</label><input type="text" class="form-control" id="searchDailyKeyword" placeholder="기사명 검색"></div>
+                        <div class="col-12 col-md-6 d-flex align-items-end gap-2"><button class="btn btn-primary px-4 rounded-2 w-100" onclick="app.applyDailySearch()">조회하기</button></div>
                     </div>
                 </div>
                 <div class="dash-card">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="fw-bold mb-0">일별 운행 기록 목록</h5>
-                        <div><button class="btn btn-sm btn-outline-success" onclick="app.downloadDailyExcel()"><i class="bi bi-file-excel"></i> 엑셀 받기</button></div>
+                        <button class="btn btn-sm btn-outline-success" onclick="app.downloadDailyExcel()"><i class="bi bi-file-excel"></i> 엑셀 받기</button>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>운행일</th><th>기사명</th><th>차량번호</th><th>화주사</th><th>거리</th><th>유류비</th><th>증빙자료</th><th class="text-center">관리</th></tr></thead>
+                            <thead><tr><th>운행일</th><th>기사명</th><th>화주사</th><th>시작/종료 계기판</th><th>거리</th><th>유류비</th><th>증빙자료</th><th class="text-center">관리</th></tr></thead>
                             <tbody id="tblDailyRecordsBody"></tbody>
                         </table>
                     </div>
@@ -220,133 +209,61 @@
 
             <div class="tab-pane fade" id="pane-lookup-monthly">
                 <div class="dash-card mb-4">
-                    <h5 class="fw-bold mb-3">월별 합산 요약 검색</h5>
-                    <div class="row g-2">
-                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">정산 대상 연월</label><input type="month" class="form-control fw-bold" id="searchMonthlyMonth"></div>
-                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">화주사 지정 필터</label><select class="form-select fw-bold text-primary" id="searchMonthlyCompany"></select></div>
-                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">특정 기사 검색</label><input type="text" class="form-control" id="searchMonthlyKeyword" placeholder="기사명 검색"></div>
-                    </div>
-                    <div class="d-flex justify-content-end gap-2 mt-3">
-                        <button class="btn btn-primary px-4 rounded-2" onclick="app.applyMonthlySearch()">해당 월 정산 요약 조회</button>
+                    <div class="row g-2 mb-3">
+                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">연월 필터</label><input type="month" class="form-control fw-bold" id="searchMonthlyMonth"></div>
+                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">화주사 필터</label><select class="form-select fw-bold text-primary" id="searchMonthlyCompany"></select></div>
+                        <div class="col-12 col-md-4 d-flex align-items-end"><button class="btn btn-primary px-4 w-100 rounded-2" onclick="app.applyMonthlySearch()">조회</button></div>
                     </div>
                 </div>
                 <div class="dash-card">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="fw-bold mb-0 text-primary" id="txtMonthlyResultTitle">월별 요약 결과</h5>
-                        <div><button class="btn btn-sm btn-outline-success" onclick="app.downloadMonthlyExcel()"><i class="bi bi-file-excel"></i> 엑셀 받기</button></div>
+                        <button class="btn btn-sm btn-outline-success" onclick="app.downloadMonthlyExcel()"><i class="bi bi-file-excel"></i> 엑셀 받기</button>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>기사명</th><th>전화번호</th><th>차량번호</th><th>화주사</th><th>운행일수</th><th>총 거리</th><th>총 유류비</th></tr></thead>
+                            <thead><tr><th>기사명</th><th>차량번호</th><th>화주사</th><th>운행일수</th><th>총 거리</th><th>총 유류비</th></tr></thead>
                             <tbody id="tblMonthlyRecordsBody"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
-
-            <div class="tab-pane fade" id="pane-history">
+            
+            <div class="tab-pane fade" id="pane-receipts">
+                <div class="dash-card mb-4 border border-warning border-3">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-receipt"></i> 주유 영수증 통합 관리</h5>
+                    <div class="row g-2">
+                        <div class="col-6 col-md-4"><input type="month" class="form-control fw-bold" id="searchReceiptMonth"></div>
+                        <div class="col-6 col-md-4"><select class="form-select fw-bold text-primary" id="searchReceiptCompany"></select></div>
+                        <div class="col-12 col-md-4"><button class="btn btn-warning w-100 fw-bold" onclick="app.applyReceiptSearch()">영수증 내역 조회</button></div>
+                    </div>
+                </div>
                 <div class="dash-card">
-                    <h5 class="fw-bold mb-4">데이터 수정 히스토리 <span class="badge bg-light text-muted fw-normal ms-2 border">최대 30일 보관</span></h5>
+                    <div class="d-flex justify-content-end mb-3">
+                        <button class="btn btn-sm btn-outline-success" onclick="app.downloadReceiptExcel()"><i class="bi bi-file-excel"></i> 영수증 내역 엑셀 받기</button>
+                    </div>
                     <div class="table-responsive">
-                        <table class="table table-modern align-middle text-nowrap">
-                            <thead><tr><th>수정일시</th><th>기사명</th><th>화주사</th><th>수정 전 거리</th><th>수정 후 거리</th><th>수정자</th></tr></thead>
-                            <tbody id="tblHistoryBody"></tbody>
+                        <table class="table table-modern align-middle table-hover text-nowrap">
+                            <thead><tr><th>결제일</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>결제금액</th><th>영수증 보기</th><th class="text-center">관리</th></tr></thead>
+                            <tbody id="tblAdminReceiptBody"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
-            
+
             <div class="tab-pane fade" id="pane-fuelrate">
                 <div class="dash-card">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h5 class="fw-bold mb-0">화주사별 단가 설정 내역</h5>
                         <button class="btn btn-primary btn-sm rounded-2 btn-mgr-lock" onclick="app.openFuelRateModal()">+ 새 단가 설정</button>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>적용 연월</th><th>대상 화주사</th><th>설정 단가(원)</th><th class="text-center">관리</th></tr></thead>
-                            <tbody id="tblFuelRateBody"></tbody>
-                        </table>
-                    </div>
+                    <div class="table-responsive"><table class="table table-modern align-middle table-hover text-nowrap"><thead><tr><th>적용 연월</th><th>대상 화주사</th><th>설정 단가(원)</th><th class="text-center">관리</th></tr></thead><tbody id="tblFuelRateBody"></tbody></table></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="mdlDriver" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content rounded-4 border-0 shadow">
-                <div class="modal-header bg-light"><h5 class="modal-title fw-bold" id="mdlDriverTitle">기사 등록</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <form id="frmDriver">
-                    <div class="modal-body p-4">
-                        <input type="hidden" id="hdnEditOriginPhone">
-                        <div class="mb-3"><label class="form-label small fw-bold">성명</label><input type="text" class="form-control" id="mDriverName" required></div>
-                        <div class="mb-3"><label class="form-label small fw-bold">전화번호 (ID)</label><input type="tel" class="form-control" id="mDriverPhone" pattern="010\d{8}" required></div>
-                        <div class="mb-3"><label class="form-label small fw-bold">차량번호</label><input type="text" class="form-control" id="mDriverCar" required></div>
-                        <div class="mb-0"><label class="form-label small fw-bold text-primary">소속 화주사 선택</label><select class="form-select form-control" id="mDriverCompany" required></select></div>
-                    </div>
-                    <div class="modal-footer bg-light"><button type="submit" class="btn btn-primary rounded-2">저장</button></div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="mdlEditDaily" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
-            <div class="modal-content shadow rounded-4 border-0">
-                <div class="modal-header bg-primary text-white"><h6 class="modal-title fw-bold">운행 거리 수정</h6><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <form id="frmEditDaily">
-                    <div class="modal-body p-4">
-                        <input type="hidden" id="eDailyDate">
-                        <input type="hidden" id="eDailyPhone">
-                        <input type="hidden" id="eDailyCompany">
-                        <input type="hidden" id="eDailyName">
-                        <div class="mb-3"><label class="form-label small text-muted mb-0">대상 기사</label><p class="fw-bold mb-0" id="eDailyNameTxt"></p></div>
-                        <div class="mb-3"><label class="form-label small text-muted mb-0">수정할 운행 거리 (km)</label><input type="number" class="form-control fw-bold" id="eDailyDistance" required></div>
-                    </div>
-                    <div class="modal-footer bg-light"><button type="submit" class="btn btn-primary w-100">수정 반영</button></div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="mdlFuelRate" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
-            <div class="modal-content shadow rounded-4 border-0">
-                <form id="frmFuelRate">
-                    <div class="modal-body p-4 text-center">
-                        <h6 class="fw-bold mb-4">새 단가 일괄 설정</h6>
-                        <label class="form-label small fw-bold text-muted mb-1 text-start d-block">적용 월</label>
-                        <input type="month" class="form-control mb-3 fw-bold" id="mFuelRateMonth" required>
-                        <label class="form-label small fw-bold text-muted mb-1 text-start d-block">대상 화주사</label>
-                        <select class="form-select mb-3 fw-bold text-primary" id="mFuelRateCompany"></select>
-                        <label class="form-label small fw-bold text-muted mb-1 text-start d-block">1km 당 금액(원)</label>
-                        <input type="number" class="form-control fw-bold text-danger" id="mFuelRateVal" required>
-                    </div>
-                    <div class="modal-footer"><button type="submit" class="btn btn-primary w-100">설정 및 소급 적용</button></div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="mdlCompany" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content shadow-lg rounded-4 border-0">
-                <div class="modal-header border-bottom-0 pb-0 mt-3 px-4">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-building-gear text-primary"></i> 화주사 마스터 관리</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="input-group mb-4 shadow-sm rounded-3">
-                        <input type="text" class="form-control form-control-lg border-primary" id="mNewCompanyName" placeholder="새로운 화주사 이름 입력">
-                        <button class="btn btn-primary px-4 fw-bold" onclick="app.addMasterCompany()"><i class="bi bi-plus-lg"></i> 추가</button>
-                    </div>
-                    <h6 class="small fw-bold text-muted mb-3"><i class="bi bi-list-check"></i> 등록된 화주사 목록</h6>
-                    <ul class="list-group list-group-flush gap-2" id="ulMasterCompanies" style="max-height: 40vh; overflow-y: auto;"></ul>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div class="modal fade" id="mdlCompany" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content shadow-lg rounded-4 border-0"><div class="modal-header border-bottom-0 pb-0 mt-3 px-4"><h5 class="modal-title fw-bold text-dark"><i class="bi bi-building-gear text-primary"></i> 화주사 마스터 관리</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><div class="input-group mb-4 shadow-sm rounded-3"><input type="text" class="form-control form-control-lg border-primary" id="mNewCompanyName" placeholder="새로운 화주사 이름 입력"><button class="btn btn-primary px-4 fw-bold" onclick="app.addMasterCompany()"><i class="bi bi-plus-lg"></i> 추가</button></div><h6 class="small fw-bold text-muted mb-3"><i class="bi bi-list-check"></i> 등록된 화주사 목록</h6><ul class="list-group list-group-flush gap-2" id="ulMasterCompanies" style="max-height: 40vh; overflow-y: auto;"></ul></div></div></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
