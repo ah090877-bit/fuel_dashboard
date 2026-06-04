@@ -43,6 +43,13 @@ body {
 .bg-purple-light { background-color: #f2efff; color: #7052ff; }
 .bg-orange-light { background-color: #fff3e0; color: #ff9800; }
 
+/* ⭐️ 모바일에서 표(Table) 글씨가 세로로 찌그러지는 현상 완벽 방지 */
+.table-modern th, .table-modern td {
+    white-space: nowrap !important; /* 글씨 줄바꿈 방지 */
+    padding: 14px 16px;
+    vertical-align: middle;
+}
+
 .table-modern th {
     background-color: #f8f9fa;
     color: #a3aed1;
@@ -50,13 +57,10 @@ body {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: 14px;
     border-bottom: 2px solid #edf2f7;
 }
 
 .table-modern td {
-    padding: 14px;
-    vertical-align: middle;
     border-bottom: 1px solid #f4f7fe;
     color: #2b3674;
     font-size: 0.95rem;
@@ -80,25 +84,17 @@ body {
     box-shadow: 0px 4px 14px rgba(67, 24, 255, 0.25);
 }
 
-/* ⭐️ 모바일 탭 메뉴 가로 스와이프 기능 */
 .mobile-scroll-tabs {
     flex-wrap: nowrap !important;
     overflow-x: auto;
     white-space: nowrap;
-    -webkit-overflow-scrolling: touch; /* 아이폰 부드러운 스크롤 */
+    -webkit-overflow-scrolling: touch; 
 }
-
-/* 스크롤바 안 보이게 숨기기 (깔끔한 UI) */
-.mobile-scroll-tabs::-webkit-scrollbar {
-    display: none; 
-}
-.mobile-scroll-tabs {
-    -ms-overflow-style: none; 
-    scrollbar-width: none; 
-}
+.mobile-scroll-tabs::-webkit-scrollbar { display: none; }
+.mobile-scroll-tabs { -ms-overflow-style: none; scrollbar-width: none; }
 
 @media (max-width: 576px) {
     body { padding: 10px; }
     .dash-card { padding: 16px; }
-    .table-modern th, .table-modern td { padding: 8px; font-size: 0.85rem; }
+    .table-modern th, .table-modern td { padding: 10px 12px; font-size: 0.85rem; }
 }
