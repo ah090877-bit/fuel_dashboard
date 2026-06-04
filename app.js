@@ -3,11 +3,10 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF
 const app = {
     user: JSON.parse(localStorage.getItem('fuelUser')) || null,
     loginTargetRole: '',
-    rawDb: { drivers: [], fuelRatesList: [], history: [], mileages: [], masterCompanies: [], receipts: [] },
+    rawDb: { drivers: [], fuelRatesList: [], mileages: [], masterCompanies: [], receipts: [] },
     filteredDailyMileages: [],
     filteredMonthlyMileages: [],
     filteredAdminReceipts: [],
-    charts: {},
 
     init: () => {
         app.bindEvents();
@@ -41,14 +40,11 @@ const app = {
         const tabElList = [].slice.call(document.querySelectorAll('#adminTabs button'));
         tabElList.forEach(tabEl => {
             tabEl.addEventListener('shown.bs.tab', (e) => {
-                if (e.target.id === 'tab-dash') app.renderCharts();
                 if (e.target.id === 'tab-unsubmitted') {
                     document.getElementById('unsubmittedDateFilter').value = app.getSafeTodayString();
                     app.renderUnsubmittedTable();
                 }
-                if (e.target.id === 'tab-lookup-monthly') {
-                    app.applyMonthlySearch();
-                }
+                if (e.target.id === 'tab-lookup-monthly') app.applyMonthlySearch();
                 if (e.target.id === 'tab-receipts') app.applyReceiptSearch();
                 if (e.target.id === 'tab-fuelrate') app.renderFuelRateTable();
             });
@@ -84,13 +80,8 @@ const app = {
         } else if (target === 'admin' || target === 'manager') {
             document.getElementById('view-admin').classList.remove('d-none');
             document.getElementById('view-admin').classList.add('active');
-            app.applyRoleRestrictions(target);
             app.loadAdminDashboardData();
         }
-    },
-
-    applyRoleRestrictions: (role) => {
-        // 매니저 등 권한 제한 로직 (기존 유지)
     },
 
     getSafeTodayString: () => {
@@ -124,7 +115,6 @@ const app = {
         return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     },
 
-    // ⭐️ 누락되었던 이미지 압축 함수 복원 (업로드 오류 해결)
     compressImage: (file) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -135,16 +125,10 @@ const app = {
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
-                    const MAX_WIDTH = 1024;
-                    const MAX_HEIGHT = 1024;
-                    let width = img.width;
-                    let height = img.height;
-                    
-                    if (width > height) {
-                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                    } else {
-                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                    }
+                    const MAX_WIDTH = 1024; const MAX_HEIGHT = 1024;
+                    let width = img.width; let height = img.height;
+                    if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                    else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
                     canvas.width = width; canvas.height = height;
                     ctx.drawImage(img, 0, 0, width, height);
                     resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]); 
@@ -174,6 +158,24 @@ const app = {
         app.showLoading(false);
 
         if (data) {
+            // ⭐️ 1. 기사와 관리자 로그인 창 크로스 접근 철저히 차단
+            if (app.loginTargetRole === 'driver' && data.role !== 'driver') {
+                return alert('기사님 전용 로그인 화면입니다. 관리자 계정은 [관리자 로그인] 메뉴를 이용해주세요.');
+            }
+            if (app.loginTargetRole !== 'driver' && data.role === 'driver') {
+                return alert('관리자 전용 로그인 화면입니다. 기사님은 [기사님 로그인] 메뉴를 이용해주세요.');
+            }
+
+            // ⭐️ 3. 비밀번호 0000(최초 로그인)일 경우 화면 진입 차단 및 즉시 변경 강제
+            if (data.requirePasswordChange) {
+                app.tempLoginData = data; 
+                document.getElementById('dNewPw').value = '';
+                document.getElementById('dNewPwConfirm').value = '';
+                alert("초기 비밀번호가 감지되었습니다.\n안전한 사용을 위해 비밀번호를 반드시 변경해 주세요.");
+                new bootstrap.Modal(document.getElementById('mdlDriverPassword')).show();
+                return;
+            }
+
             localStorage.setItem('fuelUser', JSON.stringify(data));
             app.user = data;
             app.route(data.role);
@@ -198,12 +200,22 @@ const app = {
 
         app.showLoading(true);
         const hashedPassword = await app.hashPassword(newPw);
-        const data = await app.fetchAPI({ action: 'changePassword', phone: app.user.phone, new_password_hash: hashedPassword });
+        
+        // 강제 변경 프로세스인지, 자발적 변경 프로세스인지 식별
+        const targetPhone = app.tempLoginData ? app.tempLoginData.phone : app.user.phone;
+        const data = await app.fetchAPI({ action: 'changePassword', phone: targetPhone, new_password_hash: hashedPassword });
         app.showLoading(false);
 
         if (data) {
-            alert('비밀번호가 정상적으로 변경되었습니다.');
             bootstrap.Modal.getInstance(document.getElementById('mdlDriverPassword')).hide();
+            if (app.tempLoginData) {
+                // 강제 변경이 끝났으니 로그아웃 상태에서 재로그인 유도
+                alert('비밀번호가 정상적으로 변경되었습니다. 변경된 비밀번호로 다시 로그인해 주세요.');
+                app.tempLoginData = null; 
+                app.hideLoginForm(); 
+            } else {
+                alert('비밀번호가 정상적으로 변경되었습니다.');
+            }
         }
     },
 
@@ -262,7 +274,10 @@ const app = {
                     <td class="fw-bold text-dark">${Number(r.distance).toLocaleString()} km</td>
                     <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
                     <td class="text-center">${evidenceBtn}</td>
-                    <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}')">삭제</button></td>
+                    <td class="text-center">
+                        <button class="btn btn-outline-primary btn-sm py-0 px-2 me-1" onclick="app.editMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}', ${r.start_distance}, ${r.end_distance}, ${r.distance})">수정</button>
+                        <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}')">삭제</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -270,6 +285,16 @@ const app = {
         document.getElementById('dStatDistance').innerText = `${totalDistance.toLocaleString()} km`;
         document.getElementById('dStatCost').innerText = `${totalCost.toLocaleString()} 원`;
         document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
+    },
+
+    // ⭐️ 2. 기사 내역 수정 폼 연동
+    editMyRecord: (dateStr, company, start, end, distance) => {
+        document.getElementById('inputDate').value = dateStr;
+        document.getElementById('inputCompany').value = company;
+        document.getElementById('inputStartDist').value = start;
+        document.getElementById('inputEndDist').value = end;
+        document.getElementById('inputDistance').value = distance;
+        document.getElementById('driverFormTitle').scrollIntoView({ behavior: "smooth" });
     },
 
     renderDriverReceipts: () => {
@@ -424,9 +449,7 @@ const app = {
         const companies = new Set((app.rawDb.masterCompanies || []).map(c => c.name));
         
         if (app.user.role === 'admin') {
-            // ⭐️ d-none 클래스를 제거하여 관리자 필터가 화면에 나타나도록 수정
             if(selectEl) selectEl.classList.remove('d-none');
-            
             let opts = '<option value="ALL">전체 화주사 통합 조회</option>';
             Array.from(companies).filter(c=>c).sort().forEach(c => opts += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`);
             if(selectEl) selectEl.innerHTML = opts; 
@@ -448,9 +471,9 @@ const app = {
         }
         app.calculateSummaryStats(); 
         app.renderDriversTable(); 
-        app.renderCharts();
         app.applyDailySearch(); 
         app.applyReceiptSearch();
+        app.renderFuelRateTable(); // ⭐️ 5. 갱신 시 단가테이블 명시적 동기화
     },
 
     matchCompany: (itemCompany) => {
@@ -512,7 +535,6 @@ const app = {
         });
     },
 
-    // ⭐️ 누락되었던 화주사 마스터 관리 기능 복원
     openCompanyModal: () => {
         const ul = document.getElementById('ulMasterCompanies');
         ul.innerHTML = '';
@@ -551,7 +573,6 @@ const app = {
         app.loadAdminDashboardData();
     },
 
-    // ⭐️ 누락되었던 단가 관리 기능 복원
     openFuelRateModal: () => {
         const compSelect = document.getElementById('mFuelRateCompany');
         compSelect.innerHTML = '<option value="">전체 공통 (기본값)</option>';
@@ -593,7 +614,6 @@ const app = {
         app.loadAdminDashboardData();
     },
 
-    // ⭐️ 누락되었던 미입력 현황 / 월별 검색 복원
     renderUnsubmittedTable: () => {
         const dateFilter = document.getElementById('unsubmittedDateFilter').value;
         const tbody = document.getElementById('tblUnsubmittedBody');
@@ -637,10 +657,6 @@ const app = {
             html += `<tr><td>${app.escapeXSS(s.name)}</td><td><span class="badge bg-light text-dark border">${app.escapeXSS(s.car_number)}</span></td><td>${app.escapeXSS(s.company)}</td><td>${s.days.size}일</td><td class="fw-bold text-primary">${s.dist.toLocaleString()} km</td><td class="fw-bold text-danger">${s.cost.toLocaleString()} 원</td></tr>`;
         });
         tbody.innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">검색 결과가 없습니다.</td></tr>';
-    },
-
-    downloadMonthlyExcel: () => {
-        alert("엑셀 다운로드 기능: 일별/영수증 로직과 동일하게 확장 적용하실 수 있습니다.");
     },
 
     applyDailySearch: () => {
@@ -782,40 +798,6 @@ const app = {
         if(!confirm(`${name} 기사님을 탈퇴 처리하시겠습니까?`)) return;
         app.showLoading(true); await app.fetchAPI({ action: 'deleteDriver', phone });
         app.loadAdminDashboardData();
-    },
-
-    renderCharts: () => {
-        const mileages = (app.rawDb.mileages || []).filter(r => app.matchCompany(r.company));
-        
-        // 1번 차트: 일별 운행거리 추이
-        const dateMap = {};
-        mileages.forEach(m => {
-            const d = app.formatDateStr(m.date);
-            dateMap[d] = (dateMap[d] || 0) + (Number(m.distance) || 0);
-        });
-        const labels = Object.keys(dateMap).sort().slice(-7);
-        const vals = labels.map(l => dateMap[l]);
-        
-        const ctx = document.getElementById('cChart1')?.getContext('2d');
-        if(ctx) {
-            if(app.charts['cChart1']) app.charts['cChart1'].destroy();
-            app.charts['cChart1'] = new Chart(ctx, { type: 'line', data: { labels, datasets:[{ label:'주행량', data: vals, borderColor:'#4318ff', tension:0.3 }] } });
-        }
-
-        // ⭐️ 누락되었던 2번 차트(기사별 순위) 복원
-        const driverStats = {};
-        mileages.forEach(m => {
-            if(!driverStats[m.name]) driverStats[m.name] = 0;
-            driverStats[m.name] += (Number(m.distance) || 0);
-        });
-        const sortedDrivers = Object.keys(driverStats).sort((a,b) => driverStats[b] - driverStats[a]).slice(0, 5);
-        const driverVals = sortedDrivers.map(name => driverStats[name]);
-
-        const ctx2 = document.getElementById('cChart2')?.getContext('2d');
-        if(ctx2) {
-            if(app.charts['cChart2']) app.charts['cChart2'].destroy();
-            app.charts['cChart2'] = new Chart(ctx2, { type: 'bar', data: { labels: sortedDrivers, datasets:[{ label:'주행량(km)', data: driverVals, backgroundColor:'#05cd99' }] } });
-        }
     },
 
     downloadDailyExcel: () => {
