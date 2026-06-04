@@ -1,4 +1,4 @@
-// 🚨 알려주신 구글 웹앱 주소
+// 🚨 알려주신 구글 웹앱 주소 세팅 완료
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF3a9lj-9LjmXp1ZTk-yL97znfSniJ1_kixxVuDl0Hjar0/exec';
 
 const app = {
@@ -119,7 +119,6 @@ const app = {
         return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     },
 
-    // 단일 사진 압축 함수
     compressImage: async (file) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -236,6 +235,7 @@ const app = {
         app.renderDriverRecords();
     },
 
+    // ⭐️ 기사용 테이블 렌더링 (삭제 버튼 추가 완료)
     renderDriverRecords: () => {
         const selectedMonth = document.getElementById('driverMonthFilter').value;
         const records = app.user.driverRecords || [];
@@ -276,7 +276,10 @@ const app = {
                     <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
                     <td class="text-center">${evidenceBtn}</td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-outline-primary py-0 px-2 rounded-1" onclick="app.setupDriverEdit('${rowDateStr}', '${app.escapeXSS(r.company)}', '${r.distance}')">수정</button>
+                        <div class="btn-group btn-group-sm flex-wrap gap-1">
+                            <button class="btn btn-outline-primary py-0 px-2 rounded-1" onclick="app.setupDriverEdit('${rowDateStr}', '${app.escapeXSS(r.company)}', '${r.distance}')">수정</button>
+                            <button class="btn btn-outline-danger py-0 px-2 rounded-1" onclick="app.deleteMyRecord('${rowDateStr}', '${app.escapeXSS(r.company)}')">삭제</button>
+                        </div>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -286,6 +289,25 @@ const app = {
         document.getElementById('dStatDistance').innerText = `${totalDistance.toLocaleString()} km`;
         document.getElementById('dStatCost').innerText = `${totalCost.toLocaleString()} 원`;
         document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
+    },
+
+    // ⭐️ 기사 본인 데이터 삭제 기능 (사진까지 폐기됨)
+    deleteMyRecord: async (dateStr, company) => {
+        if(!confirm(`정말 [${dateStr}] 일자 운행 기록과 첨부된 증빙 사진을 모두 삭제하시겠습니까?`)) return;
+        app.showLoading(true);
+        const payload = { action: 'deleteDailyMileage', date: dateStr, phone: app.user.phone, company: company };
+        const res = await app.fetchAPI(payload);
+        app.showLoading(false);
+        
+        if(res) {
+            alert('성공적으로 삭제 및 사진 폐기 처리되었습니다.');
+            const updatedRecords = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
+            if (updatedRecords) {
+                app.user.driverRecords = updatedRecords;
+                localStorage.setItem('fuelUser', JSON.stringify(app.user));
+                app.renderDriverRecords(); 
+            }
+        }
     },
 
     setupDriverEdit: (date, company, distance) => {
@@ -324,7 +346,6 @@ const app = {
         document.getElementById('btnCancelEdit').classList.add('d-none');
     },
 
-    // ⭐️ 중복 등록 방지 및 다중 사진(최대 4장) 처리 적용
     handleMileageSubmit: async (e) => {
         e.preventDefault();
         const submitBtn = document.getElementById('btnSubmitMileage');
@@ -345,7 +366,6 @@ const app = {
             return alert('사진은 한 번에 최대 4장까지만 첨부 가능합니다.');
         }
 
-        // 제출 버튼 이중클릭 잠금
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 처리중...';
         app.showLoading(true);
@@ -354,7 +374,7 @@ const app = {
             action: 'saveMileage', date, distance, phone: app.user.phone,
             name: app.user.name, car_number: app.user.car_number,
             company: company, isUpdate: isEditMode, edited_by: app.user.name,
-            files: [] // 다중 파일 배열 생성
+            files: [] 
         };
 
         if (fileInput.files.length > 0) {
@@ -710,7 +730,7 @@ const app = {
     },
 
     deleteDailyProcess: async (dateStr, phone, company, name) => {
-        if(!confirm(`정말 [${name}] 기사님의 [${dateStr}] 일자 [${company}] 운행 기록을 영구 삭제하시겠습니까?`)) return;
+        if(!confirm(`정말 [${name}] 기사님의 [${dateStr}] 일자 [${company}] 운행 기록과 사진을 영구 삭제하시겠습니까?`)) return;
         app.showLoading(true);
         const payload = { action: 'deleteDailyMileage', date: dateStr, phone, company };
         const res = await app.fetchAPI(payload);
@@ -893,7 +913,6 @@ const app = {
         app.applyDailySearch();
     },
 
-    // 관리자 탭 - 다중 사진 렌더링
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
         const fStart = document.getElementById('searchDailyStart').value;
