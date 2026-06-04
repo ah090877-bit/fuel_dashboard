@@ -7,7 +7,7 @@ const app = {
     filteredDailyMileages: [],
     filteredMonthlyMileages: [],
     filteredAdminReceipts: [],
-    charts: {}, // 차트 인스턴스 보관용
+    charts: {}, 
 
     init: () => {
         app.bindEvents();
@@ -41,7 +41,6 @@ const app = {
         const tabElList = [].slice.call(document.querySelectorAll('#adminTabs button'));
         tabElList.forEach(tabEl => {
             tabEl.addEventListener('shown.bs.tab', (e) => {
-                // 탭 변경 시 차트 호버 버그 방지를 위해 다시 그림
                 if (e.target.id === 'tab-dash') app.renderAdvancedCharts();
                 if (e.target.id === 'tab-unsubmitted') {
                     document.getElementById('unsubmittedDateFilter').value = app.getSafeTodayString();
@@ -442,6 +441,7 @@ const app = {
         }
     },
 
+    // ⭐️ 잃어버렸던 버튼 완전 복구!
     setupAdminUI: () => {
         const badgeEl = document.getElementById('adminGreetingBadge');
         if(badgeEl) {
@@ -452,9 +452,14 @@ const app = {
             }
         }
         
+        // 최고관리자는 보이게, 일반 화주사 관리자는 숨기게 로직 완벽 보완
         const btnManageCompany = document.getElementById('btnManageCompany');
-        if (app.user.role === 'manager' && btnManageCompany) {
-            btnManageCompany.classList.add('d-none');
+        if (btnManageCompany) {
+            if (app.user.role === 'admin') {
+                btnManageCompany.classList.remove('d-none');
+            } else {
+                btnManageCompany.classList.add('d-none');
+            }
         }
     },
 
@@ -483,7 +488,7 @@ const app = {
             if(filterEl) app.currentAdminCompanyFilter = filterEl.value || 'ALL';
         }
         app.calculateSummaryStats(); 
-        app.renderAdvancedCharts(); // ⭐️ 2x2 AI 분석 차트 호출
+        app.renderAdvancedCharts();
         app.renderDriversTable(); 
         app.applyDailySearch(); 
         app.applyMonthlySearch(); 
@@ -523,7 +528,6 @@ const app = {
         if (document.getElementById('vMonthCost')) document.getElementById('vMonthCost').innerText = `${monthCost.toLocaleString()} 원`;
     },
 
-    // ⭐️ 신규: AI 종합 분석, 7일/30일 비교, 이상탐지 및 도넛/막대 차트 통합 렌더링
     renderAdvancedCharts: () => {
         const todayStr = app.getSafeTodayString();
         const todayDate = new Date(todayStr);
@@ -543,7 +547,6 @@ const app = {
         let past7TotalCost = 0;
         const driverStats30 = {}; 
         
-        // 0(일) ~ 6(토)
         const weekdayStats = {0: {sum:0}, 1:{sum:0}, 2:{sum:0}, 3:{sum:0}, 4:{sum:0}, 5:{sum:0}, 6:{sum:0}};
         const weekdayDates = {0: new Set(), 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set()};
 
@@ -553,33 +556,28 @@ const app = {
             const dObj = new Date(dStr);
             const dayOfWeek = dObj.getDay();
 
-            // 오늘 비용
             if (dStr === todayStr) {
                 todayCost += cost;
                 if(!driverStats30[m.phone]) driverStats30[m.phone] = {name: m.name, total30:0, dates30: new Set(), today:0};
                 driverStats30[m.phone].today += cost;
             }
 
-            // 최근 7일 (오늘 제외)
             if (dStr >= d7Str && dStr < todayStr) {
                 past7TotalCost += cost;
             }
 
-            // 최근 30일 (오늘 제외)
             if (dStr >= d30Str && dStr < todayStr) {
                 if(!driverStats30[m.phone]) driverStats30[m.phone] = {name: m.name, total30:0, dates30: new Set(), today:0};
                 driverStats30[m.phone].total30 += cost;
                 driverStats30[m.phone].dates30.add(dStr);
             }
 
-            // 최근 8주 (요일별 통계)
             if (dStr >= d56Str && dStr <= todayStr) {
                 weekdayStats[dayOfWeek].sum += cost;
                 weekdayDates[dayOfWeek].add(dStr);
             }
         });
 
-        // 1. 이상 기사 (30일 평균 대비 오늘) 탐지
         const abnormalDrivers = [];
         Object.values(driverStats30).forEach(st => {
             if (st.today > 0 && st.dates30.size > 0) {
@@ -594,13 +592,11 @@ const app = {
         });
         abnormalDrivers.sort((a,b) => b.rate - a.rate);
 
-        // 2. 전체 7일 증감률 계산
         const avg7 = Math.round(past7TotalCost / 7);
         let overallRate = 0;
         if (avg7 > 0) overallRate = Math.round(((todayCost - avg7) / avg7) * 100);
         
-        // 3. 요일별 통계 계산
-        const displayOrder = [1, 2, 3, 4, 5, 6, 0]; // 월~일 순서
+        const displayOrder = [1, 2, 3, 4, 5, 6, 0]; 
         const wdNames = ['일', '월', '화', '수', '목', '금', '토'];
         const wdChartLabels = ['월', '화', '수', '목', '금', '토', '일'];
         
@@ -612,11 +608,6 @@ const app = {
             return avg;
         });
 
-        // ==========================================
-        // DOM 업데이트 시작
-        // ==========================================
-
-        // [카드 1] AI 종합 진단 업데이트
         const aiBox = document.getElementById('aiAlertBox');
         if(abnormalDrivers.length > 0 || overallRate > 30) {
             aiBox.className = 'p-4 mb-3 rounded-4 border border-danger bg-danger-subtle text-center';
@@ -641,14 +632,13 @@ const app = {
 
         document.getElementById('aiDayPattern').innerText = `${maxWdName}요일 급증`;
 
-        // [카드 2] 이상 감지 테이블 업데이트
         document.getElementById('abnormalBadgeTitle').innerText = abnormalDrivers.length > 0 ? `위험 ${abnormalDrivers.length}건` : `특이사항 없음`;
         const abTbody = document.getElementById('abnormalDriverBody');
         abTbody.innerHTML = '';
         if(abnormalDrivers.length === 0) {
             abTbody.innerHTML = `<tr><td colspan="5" class="text-muted py-4">이상 유류비 내역이 없습니다.</td></tr>`;
         } else {
-            abnormalDrivers.slice(0, 5).forEach(d => { // 상위 5명만 표시
+            abnormalDrivers.slice(0, 5).forEach(d => {
                 const badgeInfo = d.rate >= 50 ? `<span class="badge bg-danger-subtle text-danger border border-danger">위험</span>` : `<span class="badge bg-warning-subtle text-warning border border-warning">주의</span>`;
                 abTbody.innerHTML += `<tr>
                     <td class="fw-bold">${app.escapeXSS(d.name)}</td>
@@ -660,15 +650,14 @@ const app = {
             });
         }
 
-        // [카드 3] 최근 7일 증감 분석 업데이트
         document.getElementById('avg7DayCost').innerText = `${avg7.toLocaleString()}원`;
         document.getElementById('todayCostDisp').innerText = `${todayCost.toLocaleString()}원`;
         document.getElementById('increaseRateBadge').innerText = `${overallRate > 0 ? '+'+overallRate : overallRate}%`;
         
-        let colorTheme = '#05cd99'; // 정상 (Green)
-        if(overallRate > 50) { colorTheme = '#dc3545'; document.getElementById('increaseRateBadge').className = 'badge fs-6 rounded-pill bg-danger'; } // Danger
-        else if (overallRate > 30) { colorTheme = '#fd7e14'; document.getElementById('increaseRateBadge').className = 'badge fs-6 rounded-pill bg-orange'; document.getElementById('increaseRateBadge').style.backgroundColor = '#fd7e14'; } // Orange
-        else if (overallRate > 15) { colorTheme = '#ffc107'; document.getElementById('increaseRateBadge').className = 'badge fs-6 rounded-pill bg-warning text-dark'; } // Warning
+        let colorTheme = '#05cd99'; 
+        if(overallRate > 50) { colorTheme = '#dc3545'; document.getElementById('increaseRateBadge').className = 'badge fs-6 rounded-pill bg-danger'; } 
+        else if (overallRate > 30) { colorTheme = '#fd7e14'; document.getElementById('increaseRateBadge').className = 'badge fs-6 rounded-pill bg-orange'; document.getElementById('increaseRateBadge').style.backgroundColor = '#fd7e14'; } 
+        else if (overallRate > 15) { colorTheme = '#ffc107'; document.getElementById('increaseRateBadge').className = 'badge fs-6 rounded-pill bg-warning text-dark'; } 
         else { document.getElementById('increaseRateBadge').className = 'badge fs-6 rounded-pill bg-success'; }
         
         document.getElementById('chartCenterText').innerText = `${overallRate > 0 ? '+'+overallRate : overallRate}%`;
@@ -685,13 +674,11 @@ const app = {
             });
         }
 
-        // [카드 4] 요일별 평균 유류비 업데이트
         document.getElementById('weekdayInsightText').innerHTML = `<i class="bi bi-info-circle-fill me-1"></i> <b>${maxWdName}요일</b>의 평균 유류비가 가장 높게 나타납니다.`;
         
         const ctxWd = document.getElementById('cChartWeekday')?.getContext('2d');
         if(ctxWd) {
             if(app.charts['cChartWeekday']) app.charts['cChartWeekday'].destroy();
-            // 가장 높은 값을 가진 막대만 빨간색(#dc3545), 나머지는 보라색(#b19cd9)
             const bgColors = wdChartData.map(val => val === maxWdVal ? '#dc3545' : '#b19cd9');
             
             app.charts['cChartWeekday'] = new Chart(ctxWd, {
