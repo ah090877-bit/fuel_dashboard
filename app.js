@@ -154,19 +154,11 @@ const app = {
         const phone = document.getElementById('loginPhone').value.trim();
         const pw = document.getElementById('loginPw').value.trim();
         const hashedPassword = await app.hashPassword(pw);
-        const data = await app.fetchAPI({ action: 'login', phone, password_hash: hashedPassword });
+        // ⭐️ 어떤 화면에서 로그인 시도했는지(기사/관리자)를 필수로 전송
+        const data = await app.fetchAPI({ action: 'login', phone, password_hash: hashedPassword, role: app.loginTargetRole });
         app.showLoading(false);
 
         if (data) {
-            // ⭐️ 1. 기사와 관리자 로그인 창 크로스 접근 철저히 차단
-            if (app.loginTargetRole === 'driver' && data.role !== 'driver') {
-                return alert('기사님 전용 로그인 화면입니다. 관리자 계정은 [관리자 로그인] 메뉴를 이용해주세요.');
-            }
-            if (app.loginTargetRole !== 'driver' && data.role === 'driver') {
-                return alert('관리자 전용 로그인 화면입니다. 기사님은 [기사님 로그인] 메뉴를 이용해주세요.');
-            }
-
-            // ⭐️ 3. 비밀번호 0000(최초 로그인)일 경우 화면 진입 차단 및 즉시 변경 강제
             if (data.requirePasswordChange) {
                 app.tempLoginData = data; 
                 document.getElementById('dNewPw').value = '';
@@ -201,15 +193,14 @@ const app = {
         app.showLoading(true);
         const hashedPassword = await app.hashPassword(newPw);
         
-        // 강제 변경 프로세스인지, 자발적 변경 프로세스인지 식별
-        const targetPhone = app.tempLoginData ? app.tempLoginData.phone : app.user.phone;
-        const data = await app.fetchAPI({ action: 'changePassword', phone: targetPhone, new_password_hash: hashedPassword });
+        // ⭐️ 현재 유저의 역할(Role)도 함께 보내서 정확한 열(Row)의 암호를 변경
+        const targetData = app.tempLoginData ? app.tempLoginData : app.user;
+        const data = await app.fetchAPI({ action: 'changePassword', phone: targetData.phone, new_password_hash: hashedPassword, role: targetData.role });
         app.showLoading(false);
 
         if (data) {
             bootstrap.Modal.getInstance(document.getElementById('mdlDriverPassword')).hide();
             if (app.tempLoginData) {
-                // 강제 변경이 끝났으니 로그아웃 상태에서 재로그인 유도
                 alert('비밀번호가 정상적으로 변경되었습니다. 변경된 비밀번호로 다시 로그인해 주세요.');
                 app.tempLoginData = null; 
                 app.hideLoginForm(); 
@@ -287,7 +278,6 @@ const app = {
         document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
     },
 
-    // ⭐️ 2. 기사 내역 수정 폼 연동
     editMyRecord: (dateStr, company, start, end, distance) => {
         document.getElementById('inputDate').value = dateStr;
         document.getElementById('inputCompany').value = company;
@@ -473,7 +463,7 @@ const app = {
         app.renderDriversTable(); 
         app.applyDailySearch(); 
         app.applyReceiptSearch();
-        app.renderFuelRateTable(); // ⭐️ 5. 갱신 시 단가테이블 명시적 동기화
+        app.renderFuelRateTable();
     },
 
     matchCompany: (itemCompany) => {
@@ -770,6 +760,7 @@ const app = {
         new bootstrap.Modal(document.getElementById('mdlDriver')).show();
     },
 
+    // ⭐️ 기사 등록 시 중복 여부 확인 및 알림창 띄우기 로직 추가
     handleDriverFormSubmit: async (e) => {
         e.preventDefault();
         const originPhone = document.getElementById('hdnEditOriginPhone').value;
@@ -781,9 +772,15 @@ const app = {
         bootstrap.Modal.getInstance(document.getElementById('mdlDriver')).hide();
         app.showLoading(true);
         if(!originPhone) {
-            await app.fetchAPI({ action: 'addDriver', name, phone, car_number, company, password_hash: '0000' });
+            let res = await app.fetchAPI({ action: 'addDriver', name, phone, car_number, company, password_hash: '0000' });
+            if (res && res.exists) {
+                alert('이미 기사로 등록된 번호입니다. 다른 번호를 사용해주세요.');
+            } else if (res) {
+                alert('기사 등록이 완료되었습니다.');
+            }
         } else {
             await app.fetchAPI({ action: 'updateDriver', originPhone, name, phone, car_number, company });
+            alert('기사 정보가 수정되었습니다.');
         }
         app.loadAdminDashboardData();
     },
