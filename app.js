@@ -1,4 +1,4 @@
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzL5Tbe1D0qWnN9-W6HwR-E9-T-v_8O26K6P_YvFmB0R-qUe0M7Z87pPhPzWwUf3N_w/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF3a9lj-9LjmXp1ZTk-yL97znfSniJ1_kixxVuDl0Hjar0/exec';
 
 const app = {
     user: JSON.parse(localStorage.getItem('fuelUser')) || null,
