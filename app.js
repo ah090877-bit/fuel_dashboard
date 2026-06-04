@@ -420,7 +420,7 @@ const app = {
         app.showLoading(false);
         if (data) {
             app.rawDb = data; 
-            app.setupAdminUI(); // ⭐️ 환영 메시지 및 권한에 따른 UI 제어 호출
+            app.setupAdminUI(); 
             app.populateAdminCompanyFilter(); 
             app.refreshAdminViews();
             document.getElementById('searchDailyMonth').value = app.getSafeTodayString().substring(0, 7);
@@ -431,7 +431,6 @@ const app = {
         }
     },
 
-    // ⭐️ 3. 직관적인 환영 메시지 및 화주사 매니저 UI 버튼 가리기 
     setupAdminUI: () => {
         const badgeEl = document.getElementById('adminGreetingBadge');
         if(badgeEl) {
@@ -598,16 +597,12 @@ const app = {
         new bootstrap.Modal(document.getElementById('mdlFuelRate')).show();
     },
 
-    // ⭐️ 2. 기존 단가 수정 폼 연동
     openEditFuelRateModal: (month, company, rate) => {
         app.populateFuelRateCompanySelect();
         document.getElementById('mFuelRateMonth').value = month;
         document.getElementById('mFuelRateCompany').value = company || '';
         document.getElementById('mFuelRateVal').value = rate;
-        
-        // 덮어쓰기 형태이므로, 월 변경 방지
         document.getElementById('mFuelRateMonth').setAttribute('readonly', true);
-        
         new bootstrap.Modal(document.getElementById('mdlFuelRate')).show();
     },
 
@@ -622,7 +617,6 @@ const app = {
         app.loadAdminDashboardData();
     },
 
-    // ⭐️ 1, 2. 단가 렌더링 시 권한 식별 및 수정 버튼 추가
     renderFuelRateTable: () => {
         const tbody = document.getElementById('tblFuelRateBody');
         if(!tbody) return;
@@ -781,6 +775,7 @@ const app = {
         app.loadAdminDashboardData();
     },
 
+    // ⭐️ 1. 기사 등록 폼 오픈 시 관리자는 본인 화주사만 선택 가능하게 필터링 적용
     openAddDriverModal: () => {
         document.getElementById('mdlDriverTitle').innerText = "기사 신규 등록";
         document.getElementById('hdnEditOriginPhone').value = "";
@@ -788,7 +783,11 @@ const app = {
         const compInput = document.getElementById('mDriverCompany');
         if(compInput) {
             let opts = '';
-            (app.rawDb.masterCompanies || []).forEach(c => opts += `<option value="${c.name}">${c.name}</option>`);
+            if (app.user.role === 'admin') {
+                (app.rawDb.masterCompanies || []).forEach(c => opts += `<option value="${c.name}">${c.name}</option>`);
+            } else {
+                opts = `<option value="${app.user.company}">${app.user.company}</option>`;
+            }
             compInput.innerHTML = opts;
         }
         new bootstrap.Modal(document.getElementById('mdlDriver')).show();
@@ -805,12 +804,19 @@ const app = {
         const compInput = document.getElementById('mDriverCompany');
         if(compInput) {
             let opts = '';
-            (app.rawDb.masterCompanies || []).forEach(c => opts += `<option value="${c.name}" ${c.name === d.company ? 'selected':''}>${c.name}</option>`);
+            if (app.user.role === 'admin') {
+                (app.rawDb.masterCompanies || []).forEach(c => {
+                    opts += `<option value="${c.name}" ${d.company.includes(c.name) ? 'selected':''}>${c.name}</option>`;
+                });
+            } else {
+                opts = `<option value="${app.user.company}" selected>${app.user.company}</option>`;
+            }
             compInput.innerHTML = opts;
         }
         new bootstrap.Modal(document.getElementById('mdlDriver')).show();
     },
 
+    // ⭐️ 2. 기존 기사 감지 및 "추가 소속" 동의 로직 처리
     handleDriverFormSubmit: async (e) => {
         e.preventDefault();
         const originPhone = document.getElementById('hdnEditOriginPhone').value;
@@ -821,10 +827,18 @@ const app = {
 
         bootstrap.Modal.getInstance(document.getElementById('mdlDriver')).hide();
         app.showLoading(true);
+
         if(!originPhone) {
             let res = await app.fetchAPI({ action: 'addDriver', name, phone, car_number, company, password_hash: '0000' });
             if (res && res.exists) {
-                alert('이미 기사로 등록된 번호입니다. 다른 번호를 사용해주세요.');
+                app.showLoading(false);
+                if (confirm(`해당 기사님(${res.driverName})은 이미 다른 화주사(${res.existingCompany})에 등록되어 있습니다.\n\n[${company}] 화주사에 추가로 소속시키시겠습니까?`)) {
+                    app.showLoading(true);
+                    await app.fetchAPI({ action: 'addCompanyToExistingDriver', phone: phone, company: company });
+                    alert('성공적으로 다중 소속 처리되었습니다.');
+                } else {
+                    return; // 취소 누르면 중단
+                }
             } else if (res) {
                 alert('기사 등록이 완료되었습니다.');
             }
