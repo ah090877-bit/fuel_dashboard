@@ -235,7 +235,6 @@ const app = {
         app.renderDriverRecords();
     },
 
-    // ⭐️ 기사용 테이블 렌더링 (삭제 버튼 추가 완료)
     renderDriverRecords: () => {
         const selectedMonth = document.getElementById('driverMonthFilter').value;
         const records = app.user.driverRecords || [];
@@ -291,13 +290,11 @@ const app = {
         document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
     },
 
-    // ⭐️ 기사 본인 데이터 삭제 기능 (사진까지 폐기됨)
     deleteMyRecord: async (dateStr, company) => {
         if(!confirm(`정말 [${dateStr}] 일자 운행 기록과 첨부된 증빙 사진을 모두 삭제하시겠습니까?`)) return;
         app.showLoading(true);
         const payload = { action: 'deleteDailyMileage', date: dateStr, phone: app.user.phone, company: company };
         const res = await app.fetchAPI(payload);
-        app.showLoading(false);
         
         if(res) {
             alert('성공적으로 삭제 및 사진 폐기 처리되었습니다.');
@@ -308,6 +305,7 @@ const app = {
                 app.renderDriverRecords(); 
             }
         }
+        app.showLoading(false);
     },
 
     setupDriverEdit: (date, company, distance) => {
@@ -346,6 +344,7 @@ const app = {
         document.getElementById('btnCancelEdit').classList.add('d-none');
     },
 
+    // ⭐️ 제출 후 즉시 화면에 반영되도록 로직 개선
     handleMileageSubmit: async (e) => {
         e.preventDefault();
         const submitBtn = document.getElementById('btnSubmitMileage');
@@ -401,21 +400,24 @@ const app = {
             }
         }
 
-        app.showLoading(false);
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = isEditMode ? '<i class="bi bi-check-circle"></i> 수정사항 저장' : '<i class="bi bi-cloud-arrow-up"></i> 등록하기';
-
         if (res) {
             alert('주행기록 및 증빙자료가 성공적으로 저장되었습니다.');
             app.cancelDriverEdit(); 
             
+            // ⭐️ 제출한 날짜의 '월'로 드롭다운 필터를 자동 이동
+            document.getElementById('driverMonthFilter').value = date.substring(0, 7);
+
             const updatedRecords = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
             if (updatedRecords) {
                 app.user.driverRecords = updatedRecords;
                 localStorage.setItem('fuelUser', JSON.stringify(app.user));
-                app.renderDriverRecords(); 
+                app.renderDriverRecords(); // 실시간으로 즉시 화면에 그림!
             }
         }
+
+        app.showLoading(false);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> 등록하기';
     },
 
     loadAdminDashboardData: async () => {
