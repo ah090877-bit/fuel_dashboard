@@ -422,12 +422,21 @@ const app = {
             app.rawDb = data; 
             app.setupAdminUI(); 
             app.populateAdminCompanyFilter(); 
+            
+            // ⭐️ 날짜 필터 기본값 세팅 (1일 ~ 오늘)
+            const today = app.getSafeTodayString();
+            const firstDay = today.substring(0, 8) + '01';
+            
+            document.getElementById('searchDailyMonth').value = today.substring(0, 7);
+            document.getElementById('searchDailyStartDate').value = firstDay;
+            document.getElementById('searchDailyEndDate').value = today;
+            
+            document.getElementById('searchMonthlyStartDate').value = firstDay;
+            document.getElementById('searchMonthlyEndDate').value = today;
+            
+            document.getElementById('searchReceiptMonth').value = today.substring(0, 7);
+
             app.refreshAdminViews();
-            document.getElementById('searchDailyMonth').value = app.getSafeTodayString().substring(0, 7);
-            document.getElementById('searchReceiptMonth').value = app.getSafeTodayString().substring(0, 7);
-            document.getElementById('searchMonthlyMonth').value = app.getSafeTodayString().substring(0, 7);
-            app.applyDailySearch(); 
-            app.applyReceiptSearch();
         }
     },
 
@@ -449,7 +458,6 @@ const app = {
 
     populateAdminCompanyFilter: () => {
         const selectEl = document.getElementById('adminCompanyFilter');
-        const searchComp1 = document.getElementById('searchMonthlyCompany');
         const searchComp2 = document.getElementById('searchReceiptCompany');
         const companies = new Set((app.rawDb.masterCompanies || []).map(c => c.name));
         
@@ -458,17 +466,16 @@ const app = {
             let opts = '<option value="ALL">전체 화주사 통합 조회</option>';
             Array.from(companies).filter(c=>c).sort().forEach(c => opts += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`);
             if(selectEl) selectEl.innerHTML = opts; 
-            if(searchComp1) searchComp1.innerHTML = opts; 
             if(searchComp2) searchComp2.innerHTML = opts;
             app.currentAdminCompanyFilter = selectEl?.value || 'ALL';
         } else {
             if(selectEl) selectEl.classList.add('d-none');
             app.currentAdminCompanyFilter = app.user.company; 
-            if(searchComp1) { searchComp1.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`; searchComp1.setAttribute('disabled', 'true'); }
             if(searchComp2) { searchComp2.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`; searchComp2.setAttribute('disabled', 'true'); }
         }
     },
 
+    // ⭐️ 누락되었던 기간별(월별) 조회 업데이트 로직 추가 완료
     refreshAdminViews: () => {
         if(app.user.role === 'admin') {
             const filterEl = document.getElementById('adminCompanyFilter');
@@ -477,6 +484,7 @@ const app = {
         app.calculateSummaryStats(); 
         app.renderDriversTable(); 
         app.applyDailySearch(); 
+        app.applyMonthlySearch(); 
         app.applyReceiptSearch();
         app.renderFuelRateTable();
     },
@@ -666,16 +674,18 @@ const app = {
         tbody.innerHTML = html || '<tr><td colspan="5" class="text-center text-muted">해당 날짜에 미입력한 기사가 없습니다.</td></tr>';
     },
 
+    // ⭐️ 기간별(월별) 운행 요약 - 시작일/종료일 필터 적용 완료
     applyMonthlySearch: () => {
-        const month = document.getElementById('searchMonthlyMonth').value;
-        const company = document.getElementById('searchMonthlyCompany')?.value || 'ALL';
+        const fStart = document.getElementById('searchMonthlyStartDate').value;
+        const fEnd = document.getElementById('searchMonthlyEndDate').value;
         const tbody = document.getElementById('tblMonthlyRecordsBody');
         if(!tbody) return;
         
         const mileages = (app.rawDb.mileages || []).filter(r => {
-            if (month && !app.formatDateStr(r.date).startsWith(month)) return false;
-            if (company !== 'ALL' && !String(r.company).includes(company)) return false;
-            if (!app.matchCompany(r.company)) return false;
+            if (!app.matchCompany(r.company)) return false; 
+            const d = app.formatDateStr(r.date);
+            if (fStart && d < fStart) return false;
+            if (fEnd && d > fEnd) return false;
             return true;
         });
 
@@ -691,11 +701,14 @@ const app = {
         Object.values(stats).forEach(s => {
             html += `<tr><td>${app.escapeXSS(s.name)}</td><td><span class="badge bg-light text-dark border">${app.escapeXSS(s.car_number)}</span></td><td>${app.escapeXSS(s.company)}</td><td>${s.days.size}일</td><td class="fw-bold text-primary">${s.dist.toLocaleString()} km</td><td class="fw-bold text-danger">${s.cost.toLocaleString()} 원</td></tr>`;
         });
-        tbody.innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">검색 결과가 없습니다.</td></tr>';
+        tbody.innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">해당 기간의 검색 결과가 없습니다.</td></tr>';
     },
 
+    // ⭐️ 일별 운행 조회 - 시작일/종료일 필터 적용 완료
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
+        const fStart = document.getElementById('searchDailyStartDate').value;
+        const fEnd = document.getElementById('searchDailyEndDate').value;
         const fKeyword = document.getElementById('searchDailyKeyword').value.trim().toLowerCase();
         const tbody = document.getElementById('tblDailyRecordsBody');
         if(!tbody) return;
@@ -704,6 +717,8 @@ const app = {
             if (!app.matchCompany(r.company)) return false; 
             const d = app.formatDateStr(r.date);
             if (fMonth && !d.startsWith(fMonth)) return false;
+            if (fStart && d < fStart) return false;
+            if (fEnd && d > fEnd) return false;
             if (fKeyword && !String(r.name).toLowerCase().includes(fKeyword)) return false;
             return true;
         }).sort((a,b) => new Date(b.date) - new Date(a.date));
@@ -775,7 +790,6 @@ const app = {
         app.loadAdminDashboardData();
     },
 
-    // ⭐️ 1. 기사 등록 폼 오픈 시 관리자는 본인 화주사만 선택 가능하게 필터링 적용
     openAddDriverModal: () => {
         document.getElementById('mdlDriverTitle').innerText = "기사 신규 등록";
         document.getElementById('hdnEditOriginPhone').value = "";
@@ -816,7 +830,6 @@ const app = {
         new bootstrap.Modal(document.getElementById('mdlDriver')).show();
     },
 
-    // ⭐️ 2. 기존 기사 감지 및 "추가 소속" 동의 로직 처리
     handleDriverFormSubmit: async (e) => {
         e.preventDefault();
         const originPhone = document.getElementById('hdnEditOriginPhone').value;
@@ -837,7 +850,7 @@ const app = {
                     await app.fetchAPI({ action: 'addCompanyToExistingDriver', phone: phone, company: company });
                     alert('성공적으로 다중 소속 처리되었습니다.');
                 } else {
-                    return; // 취소 누르면 중단
+                    return; 
                 }
             } else if (res) {
                 alert('기사 등록이 완료되었습니다.');
