@@ -949,7 +949,6 @@ const app = {
         tbody.innerHTML = html || '<tr><td colspan="8" class="text-center text-muted">해당 기간의 검색 결과가 없습니다.</td></tr>';
     },
 
-    // ⭐️ 1. 방문 점포수 뱃지를 클릭 가능한 버튼으로 변경
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
         const fStart = document.getElementById('searchDailyStartDate').value;
@@ -978,8 +977,6 @@ const app = {
             }
             
             const visitCount = (app.rawDb.locations || []).filter(l => l.date === app.formatDateStr(r.date) && l.phone === r.phone && l.company === r.company).length;
-            
-            // ⭐️ 버튼에 onclick="app.openRouteModal(...)" 연결
             const visitBadge = visitCount > 0 ? `<button class="btn btn-sm btn-outline-success rounded-pill px-2 py-0 fw-bold" onclick="app.openRouteModal('${app.formatDateStr(r.date)}', '${r.phone}', '${r.company}', '${r.name}')">${visitCount}곳 <i class="bi bi-search"></i></button>` : `<span class="text-muted small">-</span>`;
 
             const tr = document.createElement('tr');
@@ -999,9 +996,8 @@ const app = {
         });
     },
 
-    // ⭐️ 2. 상세 타임라인 모달 & 구글 맵 경로 연결선(Directions URL) 생성 함수 추가
+    // ⭐️ [버그 완전 해결] 구글 맵의 연속 경로(선)를 그리기 위한 URL 정밀 세팅 로직
     openRouteModal: (dateStr, phone, company, name) => {
-        // 해당 날짜, 기사, 화주사의 GPS 좌표만 필터링하여 시간순 정렬
         const locs = (app.rawDb.locations || []).filter(l =>
             app.formatDateStr(l.date) === dateStr &&
             l.phone === phone &&
@@ -1021,13 +1017,11 @@ const app = {
 
         document.getElementById('btnOpenGoogleMap').classList.remove('d-none');
 
-        // 구글 경로(Directions) 무료 스마트 링크 생성
-        let dirUrl = 'https://www.google.com/maps/dir/';
-        
+        // ⭐️ 정밀 수정: 배열에 있는 좌표들을 '/'로 엮어 구글 맵 공식 길찾기(Directions) 연동 형식으로 변환
+        const pathCoords = locs.map(l => `${l.lat},${l.lng}`).join('/');
+        const dirUrl = `https://www.google.com/maps/dir/${pathCoords}`;
+
         locs.forEach((l, idx) => {
-            dirUrl += `${l.lat},${l.lng}/`; // URL에 좌표 이어 붙이기
-            
-            // 예쁜 타임라인 HTML 조립
             tlContainer.innerHTML += `
                 <div class="d-flex align-items-start mb-3">
                     <div class="d-flex flex-column align-items-center me-3">
@@ -1042,7 +1036,7 @@ const app = {
             `;
         });
 
-        // 모달창 띄우기 및 링크 연결
+        // 수정한 완벽한 경로 추적 URL을 지도 버튼에 탑재
         document.getElementById('btnOpenGoogleMap').href = dirUrl;
         new bootstrap.Modal(document.getElementById('mdlRouteMap')).show();
     },
