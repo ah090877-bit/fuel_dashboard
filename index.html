@@ -36,7 +36,7 @@
     </div>
 
     <div id="view-driver" class="container view-section d-none py-4">
-        <button class="btn btn-danger w-100 btn-lg mb-3 shadow fw-bold py-3 rounded-4 heartbeat-btn" onclick="app.handleArrivalSubmit()"><i class="bi bi-geo-alt-fill"></i> 현재 위치 (목적지 도착) 전송</button>
+        <button class="btn btn-danger w-100 btn-lg mb-3 shadow fw-bold py-3 rounded-4" onclick="app.handleArrivalSubmit()"><i class="bi bi-geo-alt-fill"></i> 현재 위치 (목적지 도착) 전송</button>
 
         <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-3 shadow-sm">
             <div><h5 class="fw-bold mb-1 text-dark" id="driverGreeting">안녕하세요</h5><span class="badge bg-success" id="driverCarBadge">차량정보</span></div>
@@ -48,8 +48,7 @@
 
         <ul class="nav nav-pills mb-3 gap-2 bg-white p-2 rounded-3 shadow-sm border-0" id="driverTabs" role="tablist">
             <li class="nav-item flex-fill text-center"><button class="nav-link w-100 active fw-bold" id="dtab-mileage" data-bs-toggle="pill" data-bs-target="#dpane-mileage">운행 기록</button></li>
-            <li class="nav-item flex-fill text-center"><button class="nav-link w-100 fw-bold" id="dtab-receipt" data-bs-toggle="pill" data-bs-target="#dpane-receipt">주유 영수증</button></li>
-        </ul>
+            <li class="nav-item flex-fill text-center"><button class="nav-link w-100 fw-bold" id="dtab-receipt" data-bs-toggle="pill" data-bs-target="#dpane-receipt">영수증 월간 증빙</button></li> </ul>
 
         <div class="tab-content" id="driverTabContent">
             <div class="tab-pane fade show active" id="dpane-mileage">
@@ -68,7 +67,8 @@
                             </div>
                             <div class="row g-2 mb-3">
                                 <div class="col-6"><label class="form-label small fw-bold text-primary">실제 운행거리 (km)</label><input type="number" class="form-control form-control-lg text-primary fw-bold bg-light border-primary" id="inputDistance" readonly required placeholder="자동 계산됨"></div>
-                                <div class="col-6"><label class="form-label small fw-bold text-secondary">도로비 (원)</label><input type="number" class="form-control form-control-lg text-secondary fw-bold bg-light border-secondary" id="inputTollFee" placeholder="선택 입력"></div> </div>
+                                <div class="col-6"><label class="form-label small fw-bold text-secondary">도로비 (원)</label><input type="number" class="form-control form-control-lg text-secondary fw-bold bg-light border-secondary" id="inputTollFee" placeholder="선택 입력"></div>
+                            </div>
                             <div class="mb-4">
                                 <label class="form-label small fw-bold text-danger" id="lblEvidence"><i class="bi bi-camera-fill"></i> 운행 증빙 (최대 4장)</label>
                                 <input type="file" class="form-control" id="inputEvidence" accept="image/*" multiple>
@@ -86,42 +86,60 @@
                 <div class="dash-card bg-white mb-4">
                     <div class="table-responsive">
                         <table class="table table-sm table-modern table-hover align-middle text-nowrap">
-                            <thead><tr><th>날짜</th><th>화주사</th><th>시작/종료</th><th>거리</th><th>정산비</th><th>도로비</th><th>증빙</th><th class="text-center">관리</th></tr></thead> <tbody id="tblDriverMonthBody"></tbody>
+                            <thead><tr><th>날짜</th><th>화주사</th><th>시작/종료</th><th>거리</th><th>정산비</th><th>도로비</th><th>증빙</th><th class="text-center">관리</th></tr></thead>
+                            <tbody id="tblDriverMonthBody"></tbody>
                         </table>
                     </div>
                 </div>
                 <div class="row g-3 mb-4">
                     <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 거리</p><h6 class="fw-bold mb-0 text-primary" id="dStatDistance">0 km</h6></div></div>
                     <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 유류비</p><h6 class="fw-bold mb-0 text-danger" id="dStatCost">0 원</h6></div></div>
-                    <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 도로비</p><h6 class="fw-bold mb-0 text-secondary" id="dStatToll">0 원</h6></div></div> </div>
+                    <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 도로비</p><h6 class="fw-bold mb-0 text-secondary" id="dStatToll">0 원</h6></div></div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-end mb-2 mt-4">
+                    <h6 class="fw-bold text-danger mb-0"><i class="bi bi-geo-alt-fill"></i> 내 목적지 도착(GPS) 내역</h6>
+                    <input type="month" id="driverLocationMonthFilter" class="form-control form-control-sm w-auto d-inline-block">
+                </div>
+                <div class="dash-card bg-white p-3 mb-4">
+                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                        <table class="table table-sm table-modern align-middle table-hover text-nowrap mb-0">
+                            <thead><tr class="table-light"><th>시간</th><th>도착 지점</th><th>확인된 도로명 주소</th></tr></thead>
+                            <tbody id="tblDriverLocationBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <div class="tab-pane fade" id="dpane-receipt">
                 <div class="card shadow-sm border-0 rounded-4 mb-4">
                     <div class="card-body p-4">
-                        <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-receipt"></i> 주유 영수증 개별 등록</h5>
+                        <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-receipt"></i> 주유 / 도로비 영수증 월간 제출</h5>
                         <form id="receiptForm">
                             <div class="row g-2 mb-3">
                                 <div class="col-6"><label class="form-label small fw-bold">결제 날짜</label><input type="date" class="form-control form-control-lg" id="rInputDate" required></div>
                                 <div class="col-6"><label class="form-label small fw-bold">소속 화주사</label><select class="form-select form-control-lg fw-bold text-primary" id="rInputCompany" required></select></div>
                             </div>
-                            <div class="mb-3"><label class="form-label small fw-bold">주유 금액 (원)</label><input type="number" class="form-control form-control-lg" id="rInputAmount" placeholder="예: 50000" required></div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6"><label class="form-label small fw-bold">지출 항목 구분</label><select class="form-select form-control-lg fw-bold text-danger" id="rReceiptType" required><option value="주유비">⛽ 주유비 영수증</option><option value="도로비">🛣️ 하이패스·도로비 내역서</option></select></div>
+                                <div class="col-6"><label class="form-label small fw-bold">청구 금액 (원)</label><input type="number" class="form-control form-control-lg fw-bold" id="rInputAmount" placeholder="예: 50000" required></div>
+                            </div>
                             <div class="mb-4">
-                                <label class="form-label small fw-bold text-danger"><i class="bi bi-camera-fill"></i> 영수증 사진 (필수, 1장)</label>
+                                <label class="form-label small fw-bold text-danger"><i class="bi bi-camera-fill"></i> 증빙자료 사진 (필수, 1장)</label>
                                 <input type="file" class="form-control" id="rInputEvidence" accept="image/*" required>
                             </div>
-                            <button type="submit" class="btn btn-warning text-dark fw-bold w-100 btn-lg py-3 rounded-3 shadow" id="btnSubmitReceipt"><i class="bi bi-cloud-arrow-up"></i> 영수증 등록하기</button>
+                            <button type="submit" class="btn btn-warning text-dark fw-bold w-100 btn-lg py-3 rounded-3 shadow" id="btnSubmitReceipt"><i class="bi bi-cloud-arrow-up"></i> 증빙 파일 제출하기</button>
                         </form>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between align-items-end mb-2">
-                    <h6 class="fw-bold text-dark mb-0">내 주유 영수증 내역</h6>
+                    <h6 class="fw-bold text-dark mb-0">내 월간 서류 증빙 내역</h6>
                     <input type="month" id="driverReceiptMonthFilter" class="form-control form-control-sm w-auto d-inline-block">
                 </div>
                 <div class="dash-card bg-white mb-4">
                     <div class="table-responsive">
                         <table class="table table-sm table-modern table-hover align-middle text-nowrap">
-                            <thead><tr><th>날짜</th><th>화주사</th><th>주유금액</th><th>영수증</th><th class="text-center">관리</th></tr></thead>
+                            <thead><tr><th>날짜</th><th>화주사</th><th>구분</th><th>청구금액</th><th>영수증</th><th class="text-center">관리</th></tr></thead>
                             <tbody id="tblDriverReceiptBody"></tbody>
                         </table>
                     </div>
@@ -152,7 +170,7 @@
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-daily" data-bs-toggle="pill" data-bs-target="#pane-lookup-daily">일별 운행 조회</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-monthly" data-bs-toggle="pill" data-bs-target="#pane-lookup-monthly">기간별 운행 요약</button></li>
             <li class="nav-item"><button class="nav-link rounded-2 fw-bold text-danger" id="tab-locations" data-bs-toggle="pill" data-bs-target="#pane-locations"><i class="bi bi-geo-alt"></i> 운행 동선(GPS)</button></li>
-            <li class="nav-item"><button class="nav-link rounded-2" id="tab-receipts" data-bs-toggle="pill" data-bs-target="#pane-receipts">주유 영수증</button></li>
+            <li class="nav-item"><button class="nav-link rounded-2" id="tab-receipts" data-bs-toggle="pill" data-bs-target="#pane-receipts">영수증 및 청구서 확인</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-fuelrate" data-bs-toggle="pill" data-bs-target="#pane-fuelrate">단가 관리</button></li>
         </ul>
 
@@ -339,8 +357,7 @@
                 <div class="dash-card">
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>기록 시간</th><th>기사명 (방문차수)</th><th>화주사</th><th>위치 좌표</th><th class="text-center">지도 확인</th></tr></thead>
-                            <tbody id="tblLocationBody"></tbody>
+                            <thead><tr><th>기록 시간</th><th>기사명 (방문차수)</th><th>화주사</th><th>판명된 도로명 주소</th><th class="text-center">지도 확인</th></tr></thead> <tbody id="tblLocationBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -348,7 +365,7 @@
             
             <div class="tab-pane fade" id="pane-receipts">
                 <div class="dash-card mb-4">
-                    <h5 class="fw-bold mb-3"><i class="bi bi-receipt"></i> 주유 영수증 통합 관리</h5>
+                    <h5 class="fw-bold mb-3"><i class="bi bi-receipt"></i> 주유 / 도로비 서류 영수증 통합 관리</h5>
                     <div class="row g-2">
                         <div class="col-6 col-md-4"><input type="month" class="form-control fw-bold" id="searchReceiptMonth"></div>
                         <div class="col-6 col-md-4"><select class="form-select fw-bold text-primary" id="searchReceiptCompany"></select></div>
@@ -361,7 +378,7 @@
                     </div>
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>결제일</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>결제금액</th><th>영수증 보기</th><th class="text-center">관리</th></tr></thead>
+                            <thead><tr><th>결제일</th><th>기사명</th><th>비용구분</th><th>화주사</th><th>결제금액</th><th>영수증 보기</th><th class="text-center">관리</th></tr></thead>
                             <tbody id="tblAdminReceiptBody"></tbody>
                         </table>
                     </div>
