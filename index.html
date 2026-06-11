@@ -323,7 +323,7 @@
                         <h5 class="fw-bold mb-0">일별 운행 기록 목록</h5>
                         <button class="btn btn-sm btn-outline-success" onclick="app.downloadDailyExcel()"><i class="bi bi-file-excel"></i> 엑셀 받기</button>
                     </div>
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="min-height: 300px;">
                         <table class="table table-modern align-middle table-hover text-nowrap">
                             <thead><tr><th>운행일</th><th>기사명</th><th>화주사</th><th>시작/종료 계기판</th><th>거리</th><th>유류비</th><th>도로비</th><th>방문점포</th><th>증빙자료</th><th class="text-center">관리</th></tr></thead>
                             <tbody id="tblDailyRecordsBody"></tbody>
@@ -402,6 +402,22 @@
                         <button class="btn btn-primary btn-sm rounded-2 btn-mgr-lock" onclick="app.openFuelRateModal()">+ 새 단가 설정</button>
                     </div>
                     <div class="table-responsive"><table class="table table-modern align-middle table-hover text-nowrap"><thead><tr><th>적용 연월</th><th>대상 화주사</th><th>설정 단가(원)</th><th class="text-center">관리</th></tr></thead><tbody id="tblFuelRateBody"></tbody></table></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="mdlRouteMap" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow rounded-4 border-0">
+                <div class="modal-header bg-light border-bottom-0">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-geo-alt-fill text-danger"></i> <span id="mRouteTitle">운행 동선 상세</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 pt-2">
+                    <div class="timeline-container mb-4 mt-2 px-2" id="mRouteTimeline" style="max-height: 400px; overflow-y: auto;">
+                        </div>
+                    <a id="btnOpenGoogleMap" href="#" target="_blank" class="btn btn-primary w-100 fw-bold py-3 rounded-3 shadow-sm"><i class="bi bi-map-fill"></i> 구글 지도에서 동선 경로(선) 보기</a>
                 </div>
             </div>
         </div>
