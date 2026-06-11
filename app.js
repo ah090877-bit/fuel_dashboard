@@ -37,6 +37,7 @@ const app = {
 
         document.getElementById('driverMonthFilter')?.addEventListener('change', app.renderDriverRecords);
         document.getElementById('driverReceiptMonthFilter')?.addEventListener('change', app.renderDriverReceipts);
+        document.getElementById('driverLocationMonthFilter')?.addEventListener('change', app.renderDriverLocations); // ⭐️ 기사용 GPS 필터
         document.getElementById('adminCompanyFilter')?.addEventListener('change', app.refreshAdminViews);
 
         const tabElList = [].slice.call(document.querySelectorAll('#adminTabs button'));
@@ -212,15 +213,11 @@ const app = {
         }
     },
 
-    // ⭐️ GPS 위치 전송 함수 추가
+    // ⭐️ GPS 수집 시 변환된 한국 도로명 주소 알림창 매핑 로직 추가
     handleArrivalSubmit: () => {
-        if (!navigator.geolocation) {
-            return alert("GPS를 지원하지 않는 브라우저입니다.");
-        }
-        
+        if (!navigator.geolocation) return alert("GPS를 지원하지 않는 브라우저입니다.");
         const comp = document.getElementById('inputCompany').value;
         if(!comp) return alert("소속 화주사를 먼저 선택해주세요.");
-
         if(!confirm(`[${comp}] 목적지에 도착하셨습니까?\n현재 위치를 관리자에게 전송합니다.`)) return;
 
         app.showLoading(true);
@@ -233,11 +230,17 @@ const app = {
             app.showLoading(false);
             
             if(res) {
-                alert('성공적으로 위치가 전송되었습니다!');
+                // ⭐️ 구글 백엔드 서버가 찾아준 도로명 주소를 팝업창에 명시적으로 노출
+                alert(`[전송 완료]\n지점: ${comp}\n주소: ${res.address}`);
+                
+                // 전송 성공 시 내역 표 즉시 새로고침
+                const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
+                app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
+                app.renderDriverLocations();
             }
         }, (err) => {
             app.showLoading(false);
-            alert("위치 정보를 가져올 수 없습니다. 스마트폰의 위치 서비스(GPS)가 켜져 있는지, 브라우저 권한이 허용되어 있는지 확인해주세요.");
+            alert("위치 정보를 가져올 수 없습니다. GPS 설정 및 브라우저 권한을 확인해주세요.");
         }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     },
 
@@ -261,9 +264,11 @@ const app = {
         const currentMonthStr = new Date().toISOString().substring(0, 7);
         document.getElementById('driverMonthFilter').value = currentMonthStr;
         document.getElementById('driverReceiptMonthFilter').value = currentMonthStr;
+        document.getElementById('driverLocationMonthFilter').value = currentMonthStr; // ⭐️
         
         app.renderDriverRecords();
         app.renderDriverReceipts();
+        app.renderDriverLocations(); // ⭐️
     },
 
     renderDriverRecords: () => {
@@ -276,7 +281,7 @@ const app = {
                 validRecords.push(r);
                 totalDistance += Number(r.distance) || 0;
                 totalCost += Number(r.fuel_cost) || 0;
-                totalToll += Number(r.toll_fee) || 0; // ⭐️ 누적 도로비 계산
+                totalToll += Number(r.toll_fee) || 0; 
             }
         });
 
@@ -308,7 +313,7 @@ const app = {
         }
         document.getElementById('dStatDistance').innerText = `${totalDistance.toLocaleString()} km`;
         document.getElementById('dStatCost').innerText = `${totalCost.toLocaleString()} 원`;
-        document.getElementById('dStatToll').innerText = `${totalToll.toLocaleString()} 원`; // ⭐️ 화면 출력
+        document.getElementById('dStatToll').innerText = `${totalToll.toLocaleString()} 원`; 
     },
 
     editMyRecord: (dateStr, company, start, end, distance, tollFee) => {
@@ -317,7 +322,7 @@ const app = {
         document.getElementById('inputStartDist').value = start;
         document.getElementById('inputEndDist').value = end;
         document.getElementById('inputDistance').value = distance;
-        document.getElementById('inputTollFee').value = tollFee || 0; // ⭐️ 폼 연동
+        document.getElementById('inputTollFee').value = tollFee || 0; 
         document.getElementById('driverFormTitle').scrollIntoView({ behavior: "smooth" });
     },
 
@@ -328,7 +333,7 @@ const app = {
         tbody.innerHTML = '';
         
         let validReceipts = receipts.filter(r => app.formatDateStr(r.date).substring(0, 7) === selectedMonth);
-        if(validReceipts.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3">해당 월 영수증 내역이 없습니다.</td></tr>'; return; }
+        if(validReceipts.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted small py-3">해당 월 영수증 내역이 없습니다.</td></tr>'; return; }
         
         validReceipts.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(r => {
             const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0">영수증 보기</a>` : `-`;
@@ -336,6 +341,7 @@ const app = {
             tr.innerHTML = `
                 <td class="small">${app.formatDateStr(r.date)}</td>
                 <td class="small text-muted">${app.escapeXSS(r.company)}</td>
+                <td><span class="badge ${r.type==='도로비'?'bg-secondary':'bg-primary'}">${r.type || '주유비'}</span></td>
                 <td class="fw-bold text-primary">${Number(r.amount).toLocaleString()} 원</td>
                 <td class="text-center">${evidenceBtn}</td>
                 <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyReceipt('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}', ${r.amount})">삭제</button></td>
@@ -344,28 +350,34 @@ const app = {
         });
     },
 
-    deleteMyRecord: async (dateStr, company) => {
-        if(!confirm(`[${dateStr}] 운행 기록을 완전히 삭제하시겠습니까?`)) return;
-        app.showLoading(true);
-        const res = await app.fetchAPI({ action: 'deleteDailyMileage', date: dateStr, phone: app.user.phone, company: company });
-        if(res) {
-            const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
-            app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
-            app.renderDriverRecords(); 
-        }
-        app.showLoading(false);
-    },
+    // ⭐️ 신규: 기사용 내 목적지 도착(GPS) 내역 출력 렌더러
+    renderDriverLocations: () => {
+        const selectedMonth = document.getElementById('driverLocationMonthFilter').value;
+        const locations = app.user.driverRecords?.locations || [];
+        const tbody = document.getElementById('tblDriverLocationBody');
+        if(!tbody) return;
+        tbody.innerHTML = '';
 
-    deleteMyReceipt: async (dateStr, company, amount) => {
-        if(!confirm(`해당 주유 영수증을 삭제하시겠습니까?`)) return;
-        app.showLoading(true);
-        const res = await app.fetchAPI({ action: 'deleteReceipt', date: dateStr, phone: app.user.phone, company: company, amount: amount });
-        if(res) {
-            const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
-            app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
-            app.renderDriverReceipts(); 
+        let validLocs = locations.filter(l => app.formatDateStr(l.date).substring(0, 7) === selectedMonth);
+        if(validLocs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small py-3">해당 월의 도착 인증 기록이 없습니다.</td></tr>';
+            return;
         }
-        app.showLoading(false);
+
+        // 방문 차수 계산
+        const countMap = {};
+        validLocs.sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp)).forEach(l => {
+            if(!countMap[l.company]) countMap[l.company] = 0;
+            countMap[l.company]++;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="small">${l.timestamp.substring(5, 16)}</td>
+                <td class="fw-bold text-dark small">${app.escapeXSS(l.company)} <span class="badge bg-light text-dark border py-0 px-1 font-monospace">${countMap[l.company]}회차</span></td>
+                <td class="small text-muted text-wrap" style="max-width:180px;">${app.escapeXSS(l.address)}</td>
+            `;
+            tbody.prepend(tr); // 최신 동선이 맨 위로 오게 배치
+        });
     },
 
     cancelDriverEdit: () => {
@@ -373,7 +385,7 @@ const app = {
         document.getElementById('inputStartDist').value = '';
         document.getElementById('inputEndDist').value = '';
         document.getElementById('inputDistance').value = '';
-        document.getElementById('inputTollFee').value = ''; // ⭐️
+        document.getElementById('inputTollFee').value = ''; 
         document.getElementById('inputEvidence').value = '';
     },
 
@@ -384,7 +396,7 @@ const app = {
         const startDist = parseInt(document.getElementById('inputStartDist').value, 10);
         const endDist = parseInt(document.getElementById('inputEndDist').value, 10);
         const distance = parseInt(document.getElementById('inputDistance').value, 10);
-        const tollFee = parseInt(document.getElementById('inputTollFee').value, 10) || 0; // ⭐️ 도로비 수집
+        const tollFee = parseInt(document.getElementById('inputTollFee').value, 10) || 0; 
         const company = document.getElementById('inputCompany').value;
         const fileInput = document.getElementById('inputEvidence');
 
@@ -396,7 +408,7 @@ const app = {
         const payload = {
             action: 'saveMileage', date, distance, phone: app.user.phone,
             name: app.user.name, car_number: app.user.car_number,
-            company: company, start_distance: startDist, end_distance: endDist, toll_fee: tollFee, // ⭐️ 도로비 전송
+            company: company, start_distance: startDist, end_distance: endDist, toll_fee: tollFee, 
             isUpdate: false, files: [] 
         };
 
@@ -429,6 +441,7 @@ const app = {
         const date = document.getElementById('rInputDate').value;
         const company = document.getElementById('rInputCompany').value;
         const amount = parseInt(document.getElementById('rInputAmount').value, 10);
+        const receiptType = document.getElementById('rReceiptType').value; // 주유비/도로비 드롭다운 연결
         const fileInput = document.getElementById('rInputEvidence');
 
         if (isNaN(amount) || amount <= 0) return alert('금액을 바르게 입력하세요.');
@@ -436,13 +449,13 @@ const app = {
         submitBtn.disabled = true; app.showLoading(true);
         const payload = {
             action: 'saveReceipt', date, amount, phone: app.user.phone,
-            name: app.user.name, car_number: app.user.car_number, company: company,
+            name: app.user.name, car_number: app.user.car_number, company: company, type: receiptType,
             fileBase64: await app.compressImage(fileInput.files[0])
         };
 
         const res = await app.fetchAPI(payload);
         if (res) {
-            alert('주유 영수증이 등록되었습니다.');
+            alert(`${receiptType} 지출 증빙 서류가 등록되었습니다.`);
             document.getElementById('rInputAmount').value = '';
             document.getElementById('rInputEvidence').value = '';
             const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
@@ -472,7 +485,7 @@ const app = {
             document.getElementById('searchMonthlyEndDate').value = today;
             
             document.getElementById('searchReceiptMonth').value = today.substring(0, 7);
-            document.getElementById('searchLocationDate').value = today; // ⭐️ 동선 조회 디폴트 세팅
+            document.getElementById('searchLocationDate').value = today; 
 
             app.refreshAdminViews();
         }
@@ -501,7 +514,7 @@ const app = {
     populateAdminCompanyFilter: () => {
         const selectEl = document.getElementById('adminCompanyFilter');
         const searchComp2 = document.getElementById('searchReceiptCompany');
-        const searchComp3 = document.getElementById('searchLocationCompany'); // ⭐️
+        const searchComp3 = document.getElementById('searchLocationCompany'); 
         const companies = new Set((app.rawDb.masterCompanies || []).map(c => c.name));
         
         if (app.user.role === 'admin') {
@@ -531,7 +544,7 @@ const app = {
         app.applyDailySearch(); 
         app.applyMonthlySearch(); 
         app.applyReceiptSearch();
-        app.applyLocationSearch(); // ⭐️
+        app.applyLocationSearch(); 
         app.renderFuelRateTable();
     },
 
@@ -905,7 +918,7 @@ const app = {
             stats[m.phone].days.add(app.formatDateStr(m.date));
             stats[m.phone].dist += Number(m.distance) || 0;
             stats[m.phone].cost += Number(m.fuel_cost) || 0;
-            stats[m.phone].toll += Number(m.toll_fee) || 0; // ⭐️ 도로비 추가
+            stats[m.phone].toll += Number(m.toll_fee) || 0; 
         });
 
         let html = '';
@@ -957,7 +970,7 @@ const app = {
         });
     },
 
-    // ⭐️ 신규: 운행 동선(GPS) 조회
+    // ⭐️ 관리자: 변환된 도로명 주소(`address`)를 테이블에 매핑 처리
     applyLocationSearch: () => {
         const fDate = document.getElementById('searchLocationDate').value; 
         const fCompany = document.getElementById('searchLocationCompany')?.value || 'ALL'; 
@@ -974,22 +987,19 @@ const app = {
         }).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
 
         tbody.innerHTML = '';
-        if(app.filteredLocations.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">해당 날짜에 전송된 위치 기록이 없습니다.</td></tr>'; return; }
+        if(app.filteredLocations.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">해당 날짜에 전송된 위치 기록이 없습니다.</td></tr>'; return; }
 
-        // 개인별 방문 횟수를 표시하기 위한 카운터
         const visits = {};
-
         app.filteredLocations.forEach(r => {
             if(!visits[r.phone]) visits[r.phone] = 0;
             visits[r.phone]++;
             
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${r.timestamp}</td>
-                <td class="fw-bold">${app.escapeXSS(r.name)} <span class="badge bg-light text-dark ms-1">${visits[r.phone]}회째 방문</span></td>
+                <td>${r.timestamp.substring(11, 19)}</td> <td class="fw-bold">${app.escapeXSS(r.name)} <span class="badge bg-light text-dark ms-1">${visits[r.phone]}회차</span></td>
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
-                <td class="text-muted small">${r.lat}, ${r.lng}</td>
-                <td class="text-center"><a href="${r.map_url}" target="_blank" class="btn btn-sm btn-outline-danger px-3 rounded-pill"><i class="bi bi-geo-alt-fill"></i> 지도 보기</a></td>
+                <td class="text-dark small fw-bold">${app.escapeXSS(r.address)}</td>
+                <td class="text-center"><a href="${r.map_url}" target="_blank" class="btn btn-sm btn-outline-danger px-3 rounded-pill"><i class="bi bi-geo-alt-fill"></i> 구글 맵</a></td>
             `;
             tbody.appendChild(tr);
         });
@@ -1017,7 +1027,7 @@ const app = {
             tr.innerHTML = `
                 <td>${app.formatDateStr(r.date)}</td>
                 <td class="fw-bold">${app.escapeXSS(r.name)}</td>
-                <td>${r.phone}</td>
+                <td><span class="badge ${r.type==='도로비'?'bg-secondary':'bg-primary'}">${r.type || '주유비'}</span></td>
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
                 <td class="fw-bold text-primary">${Number(r.amount).toLocaleString()} 원</td>
                 <td class="text-center">${evidenceBtn}</td>
@@ -1034,7 +1044,7 @@ const app = {
     },
 
     adminDeleteReceipt: async (dateStr, phone, company, amount) => {
-        if(!confirm(`해당 주유 영수증을 삭제하시겠습니까?`)) return;
+        if(!confirm(`해당 지출 내역 영수증을 삭제하시겠습니까?`)) return;
         app.showLoading(true); await app.fetchAPI({ action: 'deleteReceipt', date: dateStr, phone: phone, company: company, amount: amount });
         app.loadAdminDashboardData();
     },
@@ -1134,13 +1144,13 @@ const app = {
     },
 
     downloadReceiptExcel: () => {
-        let html = `<table border="1"><thead><tr><th>날짜</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>금액</th></tr></thead><tbody>`;
+        let html = `<table border="1"><thead><tr><th>날짜</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>구분</th><th>금액</th></tr></thead><tbody>`;
         (app.filteredAdminReceipts || []).forEach(r => {
-            html += `<tr><td>${app.formatDateStr(r.date)}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.company}</td><td>${r.amount}</td></tr>`;
+            html += `<tr><td>${app.formatDateStr(r.date)}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.company}</td><td>${r.type}</td><td>${r.amount}</td></tr>`;
         });
         html += '</tbody></table>';
         const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([html], { type: 'application/vnd.ms-excel' }));
-        link.setAttribute("download", "주유영수증내역.xls"); link.click();
+        link.setAttribute("download", "지출영수증내역.xls"); link.click();
     }
 };
 window.onload = app.init;
