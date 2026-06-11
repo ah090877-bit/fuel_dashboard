@@ -36,7 +36,7 @@
     </div>
 
     <div id="view-driver" class="container view-section d-none py-4">
-        <button class="btn btn-danger w-100 btn-lg mb-3 shadow fw-bold py-3 rounded-4" onclick="app.handleArrivalSubmit()"><i class="bi bi-geo-alt-fill"></i> 현재 위치 (목적지 도착) 전송</button>
+        <button class="btn btn-danger w-100 btn-lg mb-3 shadow fw-bold py-3 rounded-4 heartbeat-btn" onclick="app.handleArrivalSubmit()"><i class="bi bi-geo-alt-fill"></i> 현재 위치 (목적지 도착) 전송</button>
 
         <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-3 shadow-sm">
             <div><h5 class="fw-bold mb-1 text-dark" id="driverGreeting">안녕하세요</h5><span class="badge bg-success" id="driverCarBadge">차량정보</span></div>
@@ -48,10 +48,31 @@
 
         <ul class="nav nav-pills mb-3 gap-2 bg-white p-2 rounded-3 shadow-sm border-0" id="driverTabs" role="tablist">
             <li class="nav-item flex-fill text-center"><button class="nav-link w-100 active fw-bold" id="dtab-mileage" data-bs-toggle="pill" data-bs-target="#dpane-mileage">운행 기록</button></li>
-            <li class="nav-item flex-fill text-center"><button class="nav-link w-100 fw-bold" id="dtab-receipt" data-bs-toggle="pill" data-bs-target="#dpane-receipt">영수증 월간 증빙</button></li> </ul>
+            <li class="nav-item flex-fill text-center"><button class="nav-link w-100 fw-bold" id="dtab-receipt" data-bs-toggle="pill" data-bs-target="#dpane-receipt">영수증 월간 증빙</button></li>
+        </ul>
 
         <div class="tab-content" id="driverTabContent">
             <div class="tab-pane fade show active" id="dpane-mileage">
+                <div class="d-flex justify-content-between align-items-end mb-2 mt-2">
+                    <h6 class="fw-bold text-danger mb-0"><i class="bi bi-geo-alt-fill"></i> 일일 방문 점포 현황</h6>
+                    <input type="date" id="driverLocationDateFilter" class="form-control form-control-sm w-auto d-inline-block fw-bold text-danger">
+                </div>
+                <div class="dash-card bg-white p-3 mb-4 border border-danger-subtle">
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-light rounded-3 border">
+                        <div>
+                            <h6 class="fw-bold text-dark mb-1">방문 완료 점포 수</h6>
+                            <small class="text-muted" id="txtDriverLocDate">조회 중...</small>
+                        </div>
+                        <h2 class="fw-bold text-danger mb-0"><span id="txtDriverLocCount">0</span><span class="fs-5 text-dark ms-1">곳</span></h2>
+                    </div>
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm table-modern align-middle table-hover text-nowrap mb-0">
+                            <thead><tr class="table-light"><th>시간</th><th>도착 지점</th><th>확인된 도로명 주소</th></tr></thead>
+                            <tbody id="tblDriverLocationBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="card shadow-sm border-0 rounded-4 mb-4">
                     <div class="card-body p-4">
                         <h5 class="fw-bold mb-4 text-primary" id="driverFormTitle"><i class="bi bi-pencil-square"></i> 주행거리 자동 계산</h5>
@@ -79,6 +100,7 @@
                         </form>
                     </div>
                 </div>
+                
                 <div class="d-flex justify-content-between align-items-end mb-2">
                     <h6 class="fw-bold text-dark mb-0">내 운행 기록 내역</h6>
                     <input type="month" id="driverMonthFilter" class="form-control form-control-sm w-auto d-inline-block">
@@ -95,19 +117,6 @@
                     <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 거리</p><h6 class="fw-bold mb-0 text-primary" id="dStatDistance">0 km</h6></div></div>
                     <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 유류비</p><h6 class="fw-bold mb-0 text-danger" id="dStatCost">0 원</h6></div></div>
                     <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 도로비</p><h6 class="fw-bold mb-0 text-secondary" id="dStatToll">0 원</h6></div></div>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-end mb-2 mt-4">
-                    <h6 class="fw-bold text-danger mb-0"><i class="bi bi-geo-alt-fill"></i> 내 목적지 도착(GPS) 내역</h6>
-                    <input type="month" id="driverLocationMonthFilter" class="form-control form-control-sm w-auto d-inline-block">
-                </div>
-                <div class="dash-card bg-white p-3 mb-4">
-                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
-                        <table class="table table-sm table-modern align-middle table-hover text-nowrap mb-0">
-                            <thead><tr class="table-light"><th>시간</th><th>도착 지점</th><th>확인된 도로명 주소</th></tr></thead>
-                            <tbody id="tblDriverLocationBody"></tbody>
-                        </table>
-                    </div>
                 </div>
             </div>
 
@@ -316,7 +325,7 @@
                     </div>
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>운행일</th><th>기사명</th><th>화주사</th><th>시작/종료 계기판</th><th>거리</th><th>유류비</th><th>도로비</th><th>증빙자료</th><th class="text-center">관리</th></tr></thead>
+                            <thead><tr><th>운행일</th><th>기사명</th><th>화주사</th><th>시작/종료 계기판</th><th>거리</th><th>유류비</th><th>도로비</th><th>방문점포</th><th>증빙자료</th><th class="text-center">관리</th></tr></thead>
                             <tbody id="tblDailyRecordsBody"></tbody>
                         </table>
                     </div>
@@ -337,7 +346,7 @@
                     </div>
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>기사명</th><th>차량번호</th><th>화주사</th><th>운행일수</th><th>총 거리</th><th>총 유류비</th><th>총 도로비</th></tr></thead>
+                            <thead><tr><th>기사명</th><th>차량번호</th><th>화주사</th><th>운행일수</th><th>총 방문점포</th><th>총 거리</th><th>총 유류비</th><th>총 도로비</th></tr></thead>
                             <tbody id="tblMonthlyRecordsBody"></tbody>
                         </table>
                     </div>
@@ -357,7 +366,8 @@
                 <div class="dash-card">
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>기록 시간</th><th>기사명 (방문차수)</th><th>화주사</th><th>판명된 도로명 주소</th><th class="text-center">지도 확인</th></tr></thead> <tbody id="tblLocationBody"></tbody>
+                            <thead><tr><th>기록 시간</th><th>기사명 (방문차수)</th><th>화주사</th><th>판명된 도로명 주소</th><th class="text-center">지도 확인</th></tr></thead> 
+                            <tbody id="tblLocationBody"></tbody>
                         </table>
                     </div>
                 </div>
