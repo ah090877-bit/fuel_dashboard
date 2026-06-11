@@ -109,7 +109,6 @@ const app = {
         if (loader) show ? loader.classList.remove('d-none') : loader.classList.add('d-none');
     },
 
-    // ⭐️ 오류 원인 해결 부분 (따옴표 문법 에러 수정 완료)
     escapeXSS: (str) => {
         if (!str) return '';
         return String(str).replace(/[&<>"']/g, (m) => { 
@@ -950,6 +949,7 @@ const app = {
         tbody.innerHTML = html || '<tr><td colspan="8" class="text-center text-muted">해당 기간의 검색 결과가 없습니다.</td></tr>';
     },
 
+    // ⭐️ 1. 방문 점포수 뱃지를 클릭 가능한 버튼으로 변경
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
         const fStart = document.getElementById('searchDailyStartDate').value;
@@ -978,7 +978,9 @@ const app = {
             }
             
             const visitCount = (app.rawDb.locations || []).filter(l => l.date === app.formatDateStr(r.date) && l.phone === r.phone && l.company === r.company).length;
-            const visitBadge = visitCount > 0 ? `<span class="badge bg-success-subtle text-success border border-success">${visitCount}곳</span>` : `<span class="text-muted small">-</span>`;
+            
+            // ⭐️ 버튼에 onclick="app.openRouteModal(...)" 연결
+            const visitBadge = visitCount > 0 ? `<button class="btn btn-sm btn-outline-success rounded-pill px-2 py-0 fw-bold" onclick="app.openRouteModal('${app.formatDateStr(r.date)}', '${r.phone}', '${r.company}', '${r.name}')">${visitCount}곳 <i class="bi bi-search"></i></button>` : `<span class="text-muted small">-</span>`;
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -995,6 +997,54 @@ const app = {
             `;
             tbody.appendChild(tr);
         });
+    },
+
+    // ⭐️ 2. 상세 타임라인 모달 & 구글 맵 경로 연결선(Directions URL) 생성 함수 추가
+    openRouteModal: (dateStr, phone, company, name) => {
+        // 해당 날짜, 기사, 화주사의 GPS 좌표만 필터링하여 시간순 정렬
+        const locs = (app.rawDb.locations || []).filter(l =>
+            app.formatDateStr(l.date) === dateStr &&
+            l.phone === phone &&
+            l.company === company
+        ).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        document.getElementById('mRouteTitle').innerText = `${name} 기사님 동선 (${dateStr})`;
+        const tlContainer = document.getElementById('mRouteTimeline');
+        tlContainer.innerHTML = '';
+
+        if (locs.length === 0) {
+            tlContainer.innerHTML = '<p class="text-center text-muted mt-3">기록된 동선이 없습니다.</p>';
+            document.getElementById('btnOpenGoogleMap').classList.add('d-none');
+            new bootstrap.Modal(document.getElementById('mdlRouteMap')).show();
+            return;
+        }
+
+        document.getElementById('btnOpenGoogleMap').classList.remove('d-none');
+
+        // 구글 경로(Directions) 무료 스마트 링크 생성
+        let dirUrl = 'https://www.google.com/maps/dir/';
+        
+        locs.forEach((l, idx) => {
+            dirUrl += `${l.lat},${l.lng}/`; // URL에 좌표 이어 붙이기
+            
+            // 예쁜 타임라인 HTML 조립
+            tlContainer.innerHTML += `
+                <div class="d-flex align-items-start mb-3">
+                    <div class="d-flex flex-column align-items-center me-3">
+                        <span class="badge bg-danger rounded-circle p-2">${idx+1}</span>
+                        ${idx < locs.length -1 ? '<div class="border-start border-danger border-2 h-100 my-1" style="min-height: 20px;"></div>' : ''}
+                    </div>
+                    <div>
+                        <p class="mb-0 fw-bold text-dark">${l.timestamp.substring(11, 16)}</p>
+                        <p class="mb-0 small text-muted">${app.escapeXSS(l.address)}</p>
+                    </div>
+                </div>
+            `;
+        });
+
+        // 모달창 띄우기 및 링크 연결
+        document.getElementById('btnOpenGoogleMap').href = dirUrl;
+        new bootstrap.Modal(document.getElementById('mdlRouteMap')).show();
     },
 
     applyLocationSearch: () => {
@@ -1022,7 +1072,7 @@ const app = {
             
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${r.timestamp.substring(11, 19)}</td>
+                <td>${r.timestamp.substring(11, 19)}</td> 
                 <td class="fw-bold">${app.escapeXSS(r.name)} <span class="badge bg-light text-dark ms-1">${visits[r.phone]}회차</span></td>
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
                 <td class="text-dark small fw-bold">${app.escapeXSS(r.address)}</td>
