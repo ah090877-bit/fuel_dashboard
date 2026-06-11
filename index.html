@@ -36,6 +36,8 @@
     </div>
 
     <div id="view-driver" class="container view-section d-none py-4">
+        <button class="btn btn-danger w-100 btn-lg mb-3 shadow fw-bold py-3 rounded-4 heartbeat-btn" onclick="app.handleArrivalSubmit()"><i class="bi bi-geo-alt-fill"></i> 현재 위치 (목적지 도착) 전송</button>
+
         <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-3 shadow-sm">
             <div><h5 class="fw-bold mb-1 text-dark" id="driverGreeting">안녕하세요</h5><span class="badge bg-success" id="driverCarBadge">차량정보</span></div>
             <div>
@@ -64,7 +66,9 @@
                                 <div class="col-6"><label class="form-label small fw-bold text-muted">출발 전 계기판</label><input type="number" class="form-control" id="inputStartDist" placeholder="예: 50000" required></div>
                                 <div class="col-6"><label class="form-label small fw-bold text-muted">운행 후 계기판</label><input type="number" class="form-control" id="inputEndDist" placeholder="예: 50120" required></div>
                             </div>
-                            <div class="mb-3"><label class="form-label small fw-bold text-primary">실제 운행거리 (km)</label><input type="number" class="form-control form-control-lg text-primary fw-bold bg-light border-primary" id="inputDistance" readonly required placeholder="자동 계산됨"></div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6"><label class="form-label small fw-bold text-primary">실제 운행거리 (km)</label><input type="number" class="form-control form-control-lg text-primary fw-bold bg-light border-primary" id="inputDistance" readonly required placeholder="자동 계산됨"></div>
+                                <div class="col-6"><label class="form-label small fw-bold text-secondary">도로비 (원)</label><input type="number" class="form-control form-control-lg text-secondary fw-bold bg-light border-secondary" id="inputTollFee" placeholder="선택 입력"></div> </div>
                             <div class="mb-4">
                                 <label class="form-label small fw-bold text-danger" id="lblEvidence"><i class="bi bi-camera-fill"></i> 운행 증빙 (최대 4장)</label>
                                 <input type="file" class="form-control" id="inputEvidence" accept="image/*" multiple>
@@ -82,16 +86,14 @@
                 <div class="dash-card bg-white mb-4">
                     <div class="table-responsive">
                         <table class="table table-sm table-modern table-hover align-middle text-nowrap">
-                            <thead><tr><th>날짜</th><th>화주사</th><th>시작/종료</th><th>거리</th><th>정산비</th><th>증빙</th><th class="text-center">관리</th></tr></thead>
-                            <tbody id="tblDriverMonthBody"></tbody>
+                            <thead><tr><th>날짜</th><th>화주사</th><th>시작/종료</th><th>거리</th><th>정산비</th><th>도로비</th><th>증빙</th><th class="text-center">관리</th></tr></thead> <tbody id="tblDriverMonthBody"></tbody>
                         </table>
                     </div>
                 </div>
                 <div class="row g-3 mb-4">
                     <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 거리</p><h6 class="fw-bold mb-0 text-primary" id="dStatDistance">0 km</h6></div></div>
                     <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 유류비</p><h6 class="fw-bold mb-0 text-danger" id="dStatCost">0 원</h6></div></div>
-                    <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">운행 일수</p><h6 class="fw-bold mb-0 text-dark" id="dStatDays">0일</h6></div></div>
-                </div>
+                    <div class="col-4"><div class="dash-card p-3 text-center bg-white"><p class="text-muted mb-1 small fw-bold">총 도로비</p><h6 class="fw-bold mb-0 text-secondary" id="dStatToll">0 원</h6></div></div> </div>
             </div>
 
             <div class="tab-pane fade" id="dpane-receipt">
@@ -149,6 +151,7 @@
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-drivers" data-bs-toggle="pill" data-bs-target="#pane-drivers">기사 관리</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-daily" data-bs-toggle="pill" data-bs-target="#pane-lookup-daily">일별 운행 조회</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-lookup-monthly" data-bs-toggle="pill" data-bs-target="#pane-lookup-monthly">기간별 운행 요약</button></li>
+            <li class="nav-item"><button class="nav-link rounded-2 fw-bold text-danger" id="tab-locations" data-bs-toggle="pill" data-bs-target="#pane-locations"><i class="bi bi-geo-alt"></i> 운행 동선(GPS)</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-receipts" data-bs-toggle="pill" data-bs-target="#pane-receipts">주유 영수증</button></li>
             <li class="nav-item"><button class="nav-link rounded-2" id="tab-fuelrate" data-bs-toggle="pill" data-bs-target="#pane-fuelrate">단가 관리</button></li>
         </ul>
@@ -256,7 +259,6 @@
                         </div>
                     </div>
                 </div>
-
             </div>
 
             <div class="tab-pane fade" id="pane-unsubmitted">
@@ -296,7 +298,7 @@
                     </div>
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>운행일</th><th>기사명</th><th>화주사</th><th>시작/종료 계기판</th><th>거리</th><th>유류비</th><th>증빙자료</th><th class="text-center">관리</th></tr></thead>
+                            <thead><tr><th>운행일</th><th>기사명</th><th>화주사</th><th>시작/종료 계기판</th><th>거리</th><th>유류비</th><th>도로비</th><th>증빙자료</th><th class="text-center">관리</th></tr></thead>
                             <tbody id="tblDailyRecordsBody"></tbody>
                         </table>
                     </div>
@@ -317,8 +319,28 @@
                     </div>
                     <div class="table-responsive">
                         <table class="table table-modern align-middle table-hover text-nowrap">
-                            <thead><tr><th>기사명</th><th>차량번호</th><th>화주사</th><th>운행일수</th><th>총 거리</th><th>총 유류비</th></tr></thead>
+                            <thead><tr><th>기사명</th><th>차량번호</th><th>화주사</th><th>운행일수</th><th>총 거리</th><th>총 유류비</th><th>총 도로비</th></tr></thead>
                             <tbody id="tblMonthlyRecordsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="pane-locations">
+                <div class="dash-card mb-4">
+                    <h5 class="fw-bold text-danger mb-3"><i class="bi bi-geo-alt-fill"></i> 운행 동선 및 목적지 도착 기록</h5>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">날짜</label><input type="date" class="form-control fw-bold" id="searchLocationDate"></div>
+                        <div class="col-6 col-md-3"><label class="form-label small fw-bold text-muted mb-1">화주사 필터</label><select class="form-select fw-bold text-primary" id="searchLocationCompany"></select></div>
+                        <div class="col-12 col-md-4"><label class="form-label small fw-bold text-muted mb-1">기사 검색</label><input type="text" class="form-control" id="searchLocationKeyword" placeholder="기사 이름"></div>
+                        <div class="col-12 col-md-2"><button class="btn btn-primary w-100 fw-bold" onclick="app.applyLocationSearch()">조회</button></div>
+                    </div>
+                </div>
+                <div class="dash-card">
+                    <div class="table-responsive">
+                        <table class="table table-modern align-middle table-hover text-nowrap">
+                            <thead><tr><th>기록 시간</th><th>기사명 (방문차수)</th><th>화주사</th><th>위치 좌표</th><th class="text-center">지도 확인</th></tr></thead>
+                            <tbody id="tblLocationBody"></tbody>
                         </table>
                     </div>
                 </div>
