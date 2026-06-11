@@ -3,10 +3,11 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzFBx-WmI3BDm3GwqR6O0AF
 const app = {
     user: JSON.parse(localStorage.getItem('fuelUser')) || null,
     loginTargetRole: '',
-    rawDb: { drivers: [], fuelRatesList: [], mileages: [], masterCompanies: [], receipts: [] },
+    rawDb: { drivers: [], fuelRatesList: [], mileages: [], masterCompanies: [], receipts: [], locations: [] },
     filteredDailyMileages: [],
     filteredMonthlyMileages: [],
     filteredAdminReceipts: [],
+    filteredLocations: [],
     charts: {}, 
 
     init: () => {
@@ -48,6 +49,7 @@ const app = {
                 }
                 if (e.target.id === 'tab-lookup-monthly') app.applyMonthlySearch();
                 if (e.target.id === 'tab-receipts') app.applyReceiptSearch();
+                if (e.target.id === 'tab-locations') app.applyLocationSearch();
                 if (e.target.id === 'tab-fuelrate') app.renderFuelRateTable();
             });
         });
@@ -210,6 +212,35 @@ const app = {
         }
     },
 
+    // ⭐️ GPS 위치 전송 함수 추가
+    handleArrivalSubmit: () => {
+        if (!navigator.geolocation) {
+            return alert("GPS를 지원하지 않는 브라우저입니다.");
+        }
+        
+        const comp = document.getElementById('inputCompany').value;
+        if(!comp) return alert("소속 화주사를 먼저 선택해주세요.");
+
+        if(!confirm(`[${comp}] 목적지에 도착하셨습니까?\n현재 위치를 관리자에게 전송합니다.`)) return;
+
+        app.showLoading(true);
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            
+            const payload = { action: 'saveLocation', phone: app.user.phone, name: app.user.name, company: comp, lat: lat, lng: lng };
+            const res = await app.fetchAPI(payload);
+            app.showLoading(false);
+            
+            if(res) {
+                alert('성공적으로 위치가 전송되었습니다!');
+            }
+        }, (err) => {
+            app.showLoading(false);
+            alert("위치 정보를 가져올 수 없습니다. 스마트폰의 위치 서비스(GPS)가 켜져 있는지, 브라우저 권한이 허용되어 있는지 확인해주세요.");
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    },
+
     initDriverView: () => {
         app.cancelDriverEdit(); 
         document.getElementById('driverGreeting').innerHTML = `이름: <b class="text-primary">${app.escapeXSS(app.user.name)}</b> 기사님`;
@@ -238,19 +269,20 @@ const app = {
     renderDriverRecords: () => {
         const selectedMonth = document.getElementById('driverMonthFilter').value;
         const records = app.user.driverRecords?.mileages || [];
-        let totalDistance = 0; let totalCost = 0; let validRecords = [];
+        let totalDistance = 0; let totalCost = 0; let totalToll = 0; let validRecords = [];
 
         records.forEach(r => {
             if (app.formatDateStr(r.date).substring(0, 7) === selectedMonth) {
                 validRecords.push(r);
                 totalDistance += Number(r.distance) || 0;
                 totalCost += Number(r.fuel_cost) || 0;
+                totalToll += Number(r.toll_fee) || 0; // ⭐️ 누적 도로비 계산
             }
         });
 
         const tbody = document.getElementById('tblDriverMonthBody');
         tbody.innerHTML = '';
-        if(validRecords.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted small py-3">해당 월 기록이 없습니다.</td></tr>'; } 
+        if(validRecords.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted small py-3">해당 월 기록이 없습니다.</td></tr>'; } 
         else {
             validRecords.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(r => {
                 let evidenceBtn = `<span class="text-muted small">없음</span>`;
@@ -264,9 +296,10 @@ const app = {
                     <td class="small text-secondary">${r.start_distance} → ${r.end_distance}</td>
                     <td class="fw-bold text-dark">${Number(r.distance).toLocaleString()} km</td>
                     <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
+                    <td class="fw-bold text-secondary">${Number(r.toll_fee).toLocaleString()} 원</td>
                     <td class="text-center">${evidenceBtn}</td>
                     <td class="text-center">
-                        <button class="btn btn-outline-primary btn-sm py-0 px-2 me-1" onclick="app.editMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}', ${r.start_distance}, ${r.end_distance}, ${r.distance})">수정</button>
+                        <button class="btn btn-outline-primary btn-sm py-0 px-2 me-1" onclick="app.editMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}', ${r.start_distance}, ${r.end_distance}, ${r.distance}, ${r.toll_fee})">수정</button>
                         <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}')">삭제</button>
                     </td>
                 `;
@@ -275,15 +308,16 @@ const app = {
         }
         document.getElementById('dStatDistance').innerText = `${totalDistance.toLocaleString()} km`;
         document.getElementById('dStatCost').innerText = `${totalCost.toLocaleString()} 원`;
-        document.getElementById('dStatDays').innerText = `${validRecords.length}건`;
+        document.getElementById('dStatToll').innerText = `${totalToll.toLocaleString()} 원`; // ⭐️ 화면 출력
     },
 
-    editMyRecord: (dateStr, company, start, end, distance) => {
+    editMyRecord: (dateStr, company, start, end, distance, tollFee) => {
         document.getElementById('inputDate').value = dateStr;
         document.getElementById('inputCompany').value = company;
         document.getElementById('inputStartDist').value = start;
         document.getElementById('inputEndDist').value = end;
         document.getElementById('inputDistance').value = distance;
+        document.getElementById('inputTollFee').value = tollFee || 0; // ⭐️ 폼 연동
         document.getElementById('driverFormTitle').scrollIntoView({ behavior: "smooth" });
     },
 
@@ -339,6 +373,7 @@ const app = {
         document.getElementById('inputStartDist').value = '';
         document.getElementById('inputEndDist').value = '';
         document.getElementById('inputDistance').value = '';
+        document.getElementById('inputTollFee').value = ''; // ⭐️
         document.getElementById('inputEvidence').value = '';
     },
 
@@ -349,6 +384,7 @@ const app = {
         const startDist = parseInt(document.getElementById('inputStartDist').value, 10);
         const endDist = parseInt(document.getElementById('inputEndDist').value, 10);
         const distance = parseInt(document.getElementById('inputDistance').value, 10);
+        const tollFee = parseInt(document.getElementById('inputTollFee').value, 10) || 0; // ⭐️ 도로비 수집
         const company = document.getElementById('inputCompany').value;
         const fileInput = document.getElementById('inputEvidence');
 
@@ -360,7 +396,7 @@ const app = {
         const payload = {
             action: 'saveMileage', date, distance, phone: app.user.phone,
             name: app.user.name, car_number: app.user.car_number,
-            company: company, start_distance: startDist, end_distance: endDist,
+            company: company, start_distance: startDist, end_distance: endDist, toll_fee: tollFee, // ⭐️ 도로비 전송
             isUpdate: false, files: [] 
         };
 
@@ -436,12 +472,12 @@ const app = {
             document.getElementById('searchMonthlyEndDate').value = today;
             
             document.getElementById('searchReceiptMonth').value = today.substring(0, 7);
+            document.getElementById('searchLocationDate').value = today; // ⭐️ 동선 조회 디폴트 세팅
 
             app.refreshAdminViews();
         }
     },
 
-    // ⭐️ 잃어버렸던 버튼 완전 복구!
     setupAdminUI: () => {
         const badgeEl = document.getElementById('adminGreetingBadge');
         if(badgeEl) {
@@ -452,7 +488,6 @@ const app = {
             }
         }
         
-        // 최고관리자는 보이게, 일반 화주사 관리자는 숨기게 로직 완벽 보완
         const btnManageCompany = document.getElementById('btnManageCompany');
         if (btnManageCompany) {
             if (app.user.role === 'admin') {
@@ -466,6 +501,7 @@ const app = {
     populateAdminCompanyFilter: () => {
         const selectEl = document.getElementById('adminCompanyFilter');
         const searchComp2 = document.getElementById('searchReceiptCompany');
+        const searchComp3 = document.getElementById('searchLocationCompany'); // ⭐️
         const companies = new Set((app.rawDb.masterCompanies || []).map(c => c.name));
         
         if (app.user.role === 'admin') {
@@ -474,11 +510,13 @@ const app = {
             Array.from(companies).filter(c=>c).sort().forEach(c => opts += `<option value="${app.escapeXSS(c)}">${app.escapeXSS(c)}</option>`);
             if(selectEl) selectEl.innerHTML = opts; 
             if(searchComp2) searchComp2.innerHTML = opts;
+            if(searchComp3) searchComp3.innerHTML = opts;
             app.currentAdminCompanyFilter = selectEl?.value || 'ALL';
         } else {
             if(selectEl) selectEl.classList.add('d-none');
             app.currentAdminCompanyFilter = app.user.company; 
             if(searchComp2) { searchComp2.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`; searchComp2.setAttribute('disabled', 'true'); }
+            if(searchComp3) { searchComp3.innerHTML = `<option value="${app.user.company}">${app.user.company}</option>`; searchComp3.setAttribute('disabled', 'true'); }
         }
     },
 
@@ -493,6 +531,7 @@ const app = {
         app.applyDailySearch(); 
         app.applyMonthlySearch(); 
         app.applyReceiptSearch();
+        app.applyLocationSearch(); // ⭐️
         app.renderFuelRateTable();
     },
 
@@ -862,17 +901,18 @@ const app = {
 
         const stats = {};
         mileages.forEach(m => {
-            if(!stats[m.phone]) stats[m.phone] = { name: m.name, car_number: m.car_number, company: m.company, days: new Set(), dist: 0, cost: 0 };
+            if(!stats[m.phone]) stats[m.phone] = { name: m.name, car_number: m.car_number, company: m.company, days: new Set(), dist: 0, cost: 0, toll: 0 };
             stats[m.phone].days.add(app.formatDateStr(m.date));
             stats[m.phone].dist += Number(m.distance) || 0;
             stats[m.phone].cost += Number(m.fuel_cost) || 0;
+            stats[m.phone].toll += Number(m.toll_fee) || 0; // ⭐️ 도로비 추가
         });
 
         let html = '';
         Object.values(stats).forEach(s => {
-            html += `<tr><td>${app.escapeXSS(s.name)}</td><td><span class="badge bg-light text-dark border">${app.escapeXSS(s.car_number)}</span></td><td>${app.escapeXSS(s.company)}</td><td>${s.days.size}일</td><td class="fw-bold text-primary">${s.dist.toLocaleString()} km</td><td class="fw-bold text-danger">${s.cost.toLocaleString()} 원</td></tr>`;
+            html += `<tr><td>${app.escapeXSS(s.name)}</td><td><span class="badge bg-light text-dark border">${app.escapeXSS(s.car_number)}</span></td><td>${app.escapeXSS(s.company)}</td><td>${s.days.size}일</td><td class="fw-bold text-primary">${s.dist.toLocaleString()} km</td><td class="fw-bold text-danger">${s.cost.toLocaleString()} 원</td><td class="fw-bold text-secondary">${s.toll.toLocaleString()} 원</td></tr>`;
         });
-        tbody.innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">해당 기간의 검색 결과가 없습니다.</td></tr>';
+        tbody.innerHTML = html || '<tr><td colspan="7" class="text-center text-muted">해당 기간의 검색 결과가 없습니다.</td></tr>';
     },
 
     applyDailySearch: () => {
@@ -894,7 +934,7 @@ const app = {
         }).sort((a,b) => new Date(b.date) - new Date(a.date));
 
         tbody.innerHTML = '';
-        if(app.filteredDailyMileages.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">결과가 없습니다.</td></tr>'; return; }
+        if(app.filteredDailyMileages.length === 0) { tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">결과가 없습니다.</td></tr>'; return; }
 
         app.filteredDailyMileages.forEach(r => {
             let evidenceBtn = `-`;
@@ -909,8 +949,47 @@ const app = {
                 <td class="text-muted small">${r.start_distance}km → ${r.end_distance}km</td>
                 <td class="fw-bold text-primary">${Number(r.distance).toLocaleString()} km</td>
                 <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
+                <td class="fw-bold text-secondary">${Number(r.toll_fee).toLocaleString()} 원</td>
                 <td class="text-center">${evidenceBtn}</td>
                 <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.deleteDailyProcess('${app.formatDateStr(r.date)}', '${r.phone}', '${r.company}', '${r.name}')">삭제</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    },
+
+    // ⭐️ 신규: 운행 동선(GPS) 조회
+    applyLocationSearch: () => {
+        const fDate = document.getElementById('searchLocationDate').value; 
+        const fCompany = document.getElementById('searchLocationCompany')?.value || 'ALL'; 
+        const fKeyword = document.getElementById('searchLocationKeyword').value.trim().toLowerCase();
+        const tbody = document.getElementById('tblLocationBody');
+        if(!tbody) return;
+
+        app.filteredLocations = (app.rawDb.locations || []).filter(r => {
+            if (!app.matchCompany(r.company)) return false; 
+            if (fCompany !== 'ALL' && !String(r.company).includes(fCompany)) return false; 
+            if (fDate && r.date !== fDate) return false;
+            if (fKeyword && !String(r.name).toLowerCase().includes(fKeyword)) return false;
+            return true;
+        }).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        tbody.innerHTML = '';
+        if(app.filteredLocations.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">해당 날짜에 전송된 위치 기록이 없습니다.</td></tr>'; return; }
+
+        // 개인별 방문 횟수를 표시하기 위한 카운터
+        const visits = {};
+
+        app.filteredLocations.forEach(r => {
+            if(!visits[r.phone]) visits[r.phone] = 0;
+            visits[r.phone]++;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${r.timestamp}</td>
+                <td class="fw-bold">${app.escapeXSS(r.name)} <span class="badge bg-light text-dark ms-1">${visits[r.phone]}회째 방문</span></td>
+                <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
+                <td class="text-muted small">${r.lat}, ${r.lng}</td>
+                <td class="text-center"><a href="${r.map_url}" target="_blank" class="btn btn-sm btn-outline-danger px-3 rounded-pill"><i class="bi bi-geo-alt-fill"></i> 지도 보기</a></td>
             `;
             tbody.appendChild(tr);
         });
@@ -1045,9 +1124,9 @@ const app = {
     },
 
     downloadDailyExcel: () => {
-        let html = `<table border="1"><thead><tr><th>날짜</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>출발계기판</th><th>도착계기판</th><th>실제거리</th><th>정산유류비</th></tr></thead><tbody>`;
+        let html = `<table border="1"><thead><tr><th>날짜</th><th>기사명</th><th>전화번호</th><th>화주사</th><th>출발계기판</th><th>도착계기판</th><th>실제거리</th><th>정산유류비</th><th>도로비</th></tr></thead><tbody>`;
         (app.filteredDailyMileages || []).forEach(r => {
-            html += `<tr><td>${app.formatDateStr(r.date)}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.company}</td><td>${r.start_distance}</td><td>${r.end_distance}</td><td>${r.distance}</td><td>${r.fuel_cost}</td></tr>`;
+            html += `<tr><td>${app.formatDateStr(r.date)}</td><td>${r.name}</td><td>${r.phone}</td><td>${r.company}</td><td>${r.start_distance}</td><td>${r.end_distance}</td><td>${r.distance}</td><td>${r.fuel_cost}</td><td>${r.toll_fee}</td></tr>`;
         });
         html += '</tbody></table>';
         const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([html], { type: 'application/vnd.ms-excel' }));
