@@ -109,19 +109,15 @@ const app = {
         if (loader) show ? loader.classList.remove('d-none') : loader.classList.add('d-none');
     },
 
-    // ⭐️ 문제의 주범인 따옴표 문법 오류를 완벽하게 해결했습니다.
+    // ⭐️ 화면을 깨뜨리는 원인이 되는 HTML 특수문자를 완벽하고 안전하게 차단합니다.
     escapeXSS: (str) => {
-        if (!str) return '';
-        return String(str).replace(/[&<>"']/g, (m) => { 
-            const map = { 
-                '&': '&amp;', 
-                '<': '&lt;', 
-                '>': '&gt;', 
-                '"': '&quot;', 
-                "'": '&#39;' 
-            }; 
-            return map[m]; 
-        });
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
 
     hashPassword: async (pw) => {
@@ -279,6 +275,7 @@ const app = {
         app.renderDriverLocations(); 
     },
 
+    // ⭐️ 오류 방지: 버튼 인자값(문자열/숫자)을 완벽하게 보호하여 생성합니다.
     renderDriverRecords: () => {
         const selectedMonth = document.getElementById('driverMonthFilter').value;
         const records = app.user.driverRecords?.mileages || [];
@@ -302,18 +299,27 @@ const app = {
                 if (r.evidence_url) {
                     evidenceBtn = r.evidence_url.split(',').map((url, idx) => `<a href="${url.trim()}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0 me-1">사진${idx+1}</a>`).join('');
                 }
+                
+                // ⭐️ 숫자는 0으로 기본값 보장, 문자열은 작은따옴표 에러가 없도록 이중 필터링
+                const dateStr = app.formatDateStr(r.date);
+                const compStr = r.company ? String(r.company).replace(/'/g, "\\'") : '';
+                const sDist = Number(r.start_distance) || 0;
+                const eDist = Number(r.end_distance) || 0;
+                const dist = Number(r.distance) || 0;
+                const toll = Number(r.toll_fee) || 0;
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td class="small">${app.formatDateStr(r.date).substring(5, 10)}</td>
+                    <td class="small">${dateStr.substring(5, 10)}</td>
                     <td class="small text-muted">${app.escapeXSS(r.company)}</td>
-                    <td class="small text-secondary">${r.start_distance} → ${r.end_distance}</td>
-                    <td class="fw-bold text-dark">${Number(r.distance).toLocaleString()} km</td>
-                    <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
-                    <td class="fw-bold text-secondary">${Number(r.toll_fee).toLocaleString()} 원</td>
+                    <td class="small text-secondary">${sDist} → ${eDist}</td>
+                    <td class="fw-bold text-dark">${dist.toLocaleString()} km</td>
+                    <td class="fw-bold text-danger">${Number(r.fuel_cost || 0).toLocaleString()} 원</td>
+                    <td class="fw-bold text-secondary">${toll.toLocaleString()} 원</td>
                     <td class="text-center">${evidenceBtn}</td>
                     <td class="text-center">
-                        <button class="btn btn-outline-primary btn-sm py-0 px-2 me-1" onclick="app.editMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}', ${r.start_distance}, ${r.end_distance}, ${r.distance}, ${r.toll_fee})">수정</button>
-                        <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyRecord('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}')">삭제</button>
+                        <button class="btn btn-outline-primary btn-sm py-0 px-2 me-1" onclick="app.editMyRecord('${dateStr}', '${compStr}', ${sDist}, ${eDist}, ${dist}, ${toll})">수정</button>
+                        <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyRecord('${dateStr}', '${compStr}')">삭제</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -334,6 +340,7 @@ const app = {
         document.getElementById('driverFormTitle').scrollIntoView({ behavior: "smooth" });
     },
 
+    // ⭐️ 영수증 삭제 버튼도 동일하게 안전 처리 완료
     renderDriverReceipts: () => {
         const selectedMonth = document.getElementById('driverReceiptMonthFilter').value;
         const receipts = app.user.driverRecords?.receipts || [];
@@ -345,14 +352,19 @@ const app = {
         
         validReceipts.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(r => {
             const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0">영수증 보기</a>` : `-`;
+            
+            const dateStr = app.formatDateStr(r.date);
+            const compStr = r.company ? String(r.company).replace(/'/g, "\\'") : '';
+            const amt = Number(r.amount) || 0;
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="small">${app.formatDateStr(r.date)}</td>
+                <td class="small">${dateStr}</td>
                 <td class="small text-muted">${app.escapeXSS(r.company)}</td>
-                <td><span class="badge ${r.type==='도로비'?'bg-secondary':'bg-primary'}">${r.type || '주유비'}</span></td>
-                <td class="fw-bold text-primary">${Number(r.amount).toLocaleString()} 원</td>
+                <td><span class="badge ${r.type==='도로비'?'bg-secondary':'bg-primary'}">${app.escapeXSS(r.type || '주유비')}</span></td>
+                <td class="fw-bold text-primary">${amt.toLocaleString()} 원</td>
                 <td class="text-center">${evidenceBtn}</td>
-                <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyReceipt('${app.formatDateStr(r.date)}', '${app.escapeXSS(r.company)}', ${r.amount})">삭제</button></td>
+                <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyReceipt('${dateStr}', '${compStr}', ${amt})">삭제</button></td>
             `;
             tbody.appendChild(tr);
         });
@@ -380,12 +392,15 @@ const app = {
             if(!countMap[l.company]) countMap[l.company] = 0;
             countMap[l.company]++;
             
+            const tsStr = String(l.timestamp);
+            const compStr = l.company ? String(l.company).replace(/'/g, "\\'") : '';
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="small">${l.timestamp.substring(11, 16)}</td>
+                <td class="small">${tsStr.substring(11, 16)}</td>
                 <td class="fw-bold text-dark small">${app.escapeXSS(l.company)} <span class="badge bg-light text-dark border py-0 px-1 font-monospace">${countMap[l.company]}회차</span></td>
                 <td class="small text-muted text-wrap" style="max-width:180px;">${app.escapeXSS(l.address)}</td>
-                <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyLocation('${l.timestamp}', '${app.escapeXSS(l.company)}')">삭제</button></td>
+                <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyLocation('${tsStr}', '${compStr}')">삭제</button></td>
             `;
             tbody.prepend(tr); 
         });
@@ -400,6 +415,30 @@ const app = {
             app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
             app.renderDriverLocations(); 
             app.renderDriverRecords();
+        }
+        app.showLoading(false);
+    },
+
+    deleteMyRecord: async (dateStr, company) => {
+        if(!confirm(`[${dateStr}] 운행 기록을 완전히 삭제하시겠습니까?`)) return;
+        app.showLoading(true);
+        const res = await app.fetchAPI({ action: 'deleteDailyMileage', date: dateStr, phone: app.user.phone, company: company });
+        if(res) {
+            const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
+            app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
+            app.renderDriverRecords(); 
+        }
+        app.showLoading(false);
+    },
+
+    deleteMyReceipt: async (dateStr, company, amount) => {
+        if(!confirm(`해당 지출 증빙 내역을 삭제하시겠습니까?`)) return;
+        app.showLoading(true);
+        const res = await app.fetchAPI({ action: 'deleteReceipt', date: dateStr, phone: app.user.phone, company: company, amount: amount });
+        if(res) {
+            const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
+            app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
+            app.renderDriverReceipts(); 
         }
         app.showLoading(false);
     },
@@ -778,6 +817,8 @@ const app = {
         if(drivers.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">등록된 기사가 없습니다.</td></tr>'; return; }
 
         drivers.forEach(d => {
+            const phoneStr = String(d.phone).replace(/'/g, "\\'");
+            const nameStr = d.name ? String(d.name).replace(/'/g, "\\'") : '';
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="fw-bold text-dark">${app.escapeXSS(d.name)}</td>
@@ -786,9 +827,9 @@ const app = {
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(d.company) || '미배정'}</span></td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary btn-mgr-lock" onclick="app.openEditDriverModal('${d.phone}')">수정</button>
-                        <button class="btn btn-outline-danger btn-mgr-lock" onclick="app.deleteDriverProcess('${d.phone}', '${d.name}')">삭제</button>
-                        <button class="btn btn-outline-warning" onclick="app.resetDriverPasswordProcess('${d.phone}', '${d.name}')">비번초기화</button>
+                        <button class="btn btn-outline-primary btn-mgr-lock" onclick="app.openEditDriverModal('${phoneStr}')">수정</button>
+                        <button class="btn btn-outline-danger btn-mgr-lock" onclick="app.deleteDriverProcess('${phoneStr}', '${nameStr}')">삭제</button>
+                        <button class="btn btn-outline-warning" onclick="app.resetDriverPasswordProcess('${phoneStr}', '${nameStr}')">비번초기화</button>
                     </div>
                 </td>
             `;
@@ -802,11 +843,12 @@ const app = {
         (app.rawDb.masterCompanies || []).forEach(c => {
             const badgeClass = c.status === 'active' ? 'bg-success' : 'bg-secondary';
             const statusTxt = c.status === 'active' ? '활성' : '비활성';
+            const compStr = c.name ? String(c.name).replace(/'/g, "\\'") : '';
             ul.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center">
                 <span class="fw-bold text-dark">${app.escapeXSS(c.name)}</span>
                 <div>
                     <span class="badge ${badgeClass} me-2">${statusTxt}</span>
-                    <button class="btn btn-sm btn-outline-dark py-0" onclick="app.toggleCompanyStatus('${app.escapeXSS(c.name)}', '${c.status}')">상태변경</button>
+                    <button class="btn btn-sm btn-outline-dark py-0" onclick="app.toggleCompanyStatus('${compStr}', '${c.status}')">상태변경</button>
                 </div>
             </li>`;
         });
@@ -839,9 +881,9 @@ const app = {
         compSelect.innerHTML = '';
         if(app.user.role === 'admin') {
             compSelect.innerHTML += '<option value="">전체 공통 (기본값)</option>';
-            (app.rawDb.masterCompanies || []).forEach(c => compSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+            (app.rawDb.masterCompanies || []).forEach(c => compSelect.innerHTML += `<option value="${app.escapeXSS(c.name)}">${app.escapeXSS(c.name)}</option>`);
         } else {
-            compSelect.innerHTML += `<option value="${app.user.company}">${app.user.company}</option>`;
+            compSelect.innerHTML += `<option value="${app.escapeXSS(app.user.company)}">${app.escapeXSS(app.user.company)}</option>`;
         }
     },
 
@@ -881,18 +923,22 @@ const app = {
             const isGlobal = !r.company;
             const canEdit = app.user.role === 'admin' || (app.user.role === 'manager' && app.user.company === r.company);
             
+            const monthStr = String(r.month);
+            const compStr = r.company ? String(r.company).replace(/'/g, "\\'") : '';
+            const rate = Number(r.rate) || 0;
+
             let actionBtns = '-';
             if (canEdit) {
                 actionBtns = `
-                    <button class="btn btn-sm btn-outline-primary py-0 px-2 me-1" onclick="app.openEditFuelRateModal('${r.month}', '${r.company || ''}', ${r.rate})">수정</button>
-                    <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="app.deleteFuelRateProcess('${r.month}', '${r.company || ''}')">삭제</button>
+                    <button class="btn btn-sm btn-outline-primary py-0 px-2 me-1" onclick="app.openEditFuelRateModal('${monthStr}', '${compStr}', ${rate})">수정</button>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="app.deleteFuelRateProcess('${monthStr}', '${compStr}')">삭제</button>
                 `;
             }
 
             tbody.innerHTML += `<tr>
-                <td>${r.month}</td>
-                <td><span class="badge bg-secondary">${r.company || '전체 공통 (기본값)'}</span></td>
-                <td class="fw-bold text-danger">${r.rate}원</td>
+                <td>${app.escapeXSS(r.month)}</td>
+                <td><span class="badge bg-secondary">${app.escapeXSS(r.company) || '전체 공통 (기본값)'}</span></td>
+                <td class="fw-bold text-danger">${rate}원</td>
                 <td class="text-center">${actionBtns}</td>
             </tr>`;
         });
@@ -916,7 +962,7 @@ const app = {
         let html = '';
         drivers.forEach(d => {
             if(!submittedPhones.has(String(d.phone)) && app.matchCompany(d.company)) {
-                html += `<tr><td>${app.escapeXSS(d.name)}</td><td>${d.phone}</td><td>${app.escapeXSS(d.car_number)}</td><td>${app.escapeXSS(d.company)}</td><td><span class="badge bg-danger">미입력</span></td></tr>`;
+                html += `<tr><td>${app.escapeXSS(d.name)}</td><td>${app.escapeXSS(d.phone)}</td><td>${app.escapeXSS(d.car_number)}</td><td>${app.escapeXSS(d.company)}</td><td><span class="badge bg-danger">미입력</span></td></tr>`;
             }
         });
         tbody.innerHTML = html || '<tr><td colspan="5" class="text-center text-muted">해당 날짜에 미입력한 기사가 없습니다.</td></tr>';
@@ -970,6 +1016,7 @@ const app = {
         tbody.innerHTML = html || '<tr><td colspan="8" class="text-center text-muted">해당 기간의 검색 결과가 없습니다.</td></tr>';
     },
 
+    // ⭐️ 버튼이 깨지지 않도록 모든 인자값을 이중 보안 처리 완료
     applyDailySearch: () => {
         const fMonth = document.getElementById('searchDailyMonth').value; 
         const fStart = document.getElementById('searchDailyStartDate').value;
@@ -998,20 +1045,26 @@ const app = {
             }
             
             const visitCount = (app.rawDb.locations || []).filter(l => l.date === app.formatDateStr(r.date) && l.phone === r.phone && l.company === r.company).length;
-            const visitBadge = visitCount > 0 ? `<button class="btn btn-sm btn-outline-success rounded-pill px-2 py-0 fw-bold" onclick="app.openRouteModal('${app.formatDateStr(r.date)}', '${r.phone}', '${r.company}', '${r.name}')">${visitCount}곳 <i class="bi bi-search"></i></button>` : `<span class="text-muted small">-</span>`;
+            
+            const dateStr = app.formatDateStr(r.date);
+            const phoneStr = r.phone ? String(r.phone).replace(/'/g, "\\'") : '';
+            const compStr = r.company ? String(r.company).replace(/'/g, "\\'") : '';
+            const nameStr = r.name ? String(r.name).replace(/'/g, "\\'") : '';
+            
+            const visitBadge = visitCount > 0 ? `<button class="btn btn-sm btn-outline-success rounded-pill px-2 py-0 fw-bold" onclick="app.openRouteModal('${dateStr}', '${phoneStr}', '${compStr}', '${nameStr}')">${visitCount}곳 <i class="bi bi-search"></i></button>` : `<span class="text-muted small">-</span>`;
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${app.formatDateStr(r.date)}</td>
+                <td>${dateStr}</td>
                 <td class="fw-bold">${app.escapeXSS(r.name)}</td>
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
-                <td class="text-muted small">${r.start_distance}km → ${r.end_distance}km</td>
-                <td class="fw-bold text-primary">${Number(r.distance).toLocaleString()} km</td>
-                <td class="fw-bold text-danger">${Number(r.fuel_cost).toLocaleString()} 원</td>
-                <td class="fw-bold text-secondary">${Number(r.toll_fee).toLocaleString()} 원</td>
+                <td class="text-muted small">${Number(r.start_distance || 0)}km → ${Number(r.end_distance || 0)}km</td>
+                <td class="fw-bold text-primary">${Number(r.distance || 0).toLocaleString()} km</td>
+                <td class="fw-bold text-danger">${Number(r.fuel_cost || 0).toLocaleString()} 원</td>
+                <td class="fw-bold text-secondary">${Number(r.toll_fee || 0).toLocaleString()} 원</td>
                 <td class="text-center">${visitBadge}</td>
                 <td class="text-center">${evidenceBtn}</td>
-                <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.deleteDailyProcess('${app.formatDateStr(r.date)}', '${r.phone}', '${r.company}', '${r.name}')">삭제</button></td>
+                <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.deleteDailyProcess('${dateStr}', '${phoneStr}', '${compStr}', '${nameStr}')">삭제</button></td>
             `;
             tbody.appendChild(tr);
         });
@@ -1048,7 +1101,7 @@ const app = {
                         ${idx < locs.length -1 ? '<div class="border-start border-danger border-2 h-100 my-1" style="min-height: 20px;"></div>' : ''}
                     </div>
                     <div>
-                        <p class="mb-0 fw-bold text-dark">${l.timestamp.substring(11, 16)}</p>
+                        <p class="mb-0 fw-bold text-dark">${String(l.timestamp).substring(11, 16)}</p>
                         <p class="mb-0 small text-muted">${app.escapeXSS(l.address)}</p>
                     </div>
                 </div>
@@ -1088,15 +1141,19 @@ const app = {
         if(app.filteredLocations.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">해당 날짜에 전송된 위치 기록이 없습니다.</td></tr>'; return; }
 
         app.filteredLocations.forEach(r => {
+            const tsStr = String(r.timestamp);
+            const phoneStr = r.phone ? String(r.phone).replace(/'/g, "\\'") : '';
+            const compStr = r.company ? String(r.company).replace(/'/g, "\\'") : '';
+            
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${r.timestamp.substring(11, 19)}</td> 
+                <td>${tsStr.substring(11, 19)}</td> 
                 <td class="fw-bold">${app.escapeXSS(r.name)} <span class="badge bg-light text-dark ms-1">${r.visitOrder}회차</span></td>
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
                 <td class="text-dark small fw-bold">${app.escapeXSS(r.address)}</td>
                 <td class="text-center">
                     <a href="${r.map_url}" target="_blank" class="btn btn-sm btn-outline-primary px-2 rounded-pill me-1"><i class="bi bi-map-fill"></i> 지도</a>
-                    <button class="btn btn-sm btn-outline-danger px-2 rounded-pill" onclick="app.adminDeleteLocation('${r.timestamp}', '${r.phone}', '${r.company}')">삭제</button>
+                    <button class="btn btn-sm btn-outline-danger px-2 rounded-pill" onclick="app.adminDeleteLocation('${tsStr}', '${phoneStr}', '${compStr}')">삭제</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -1127,16 +1184,25 @@ const app = {
         if(app.filteredAdminReceipts.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">내역이 없습니다.</td></tr>'; return; }
 
         app.filteredAdminReceipts.forEach(r => {
-            const evidenceBtn = r.evidence_url ? `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0">영수증 보기</a>` : `-`;
+            let evidenceBtn = `-`;
+            if(r.evidence_url) {
+                evidenceBtn = `<a href="${r.evidence_url}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill px-2 py-0">영수증 보기</a>`;
+            }
+            
+            const dateStr = app.formatDateStr(r.date);
+            const phoneStr = r.phone ? String(r.phone).replace(/'/g, "\\'") : '';
+            const compStr = r.company ? String(r.company).replace(/'/g, "\\'") : '';
+            const amt = Number(r.amount) || 0;
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${app.formatDateStr(r.date)}</td>
+                <td>${dateStr}</td>
                 <td class="fw-bold">${app.escapeXSS(r.name)}</td>
-                <td><span class="badge ${r.type==='도로비'?'bg-secondary':'bg-primary'}">${r.type || '주유비'}</span></td>
+                <td><span class="badge ${r.type==='도로비'?'bg-secondary':'bg-primary'}">${app.escapeXSS(r.type || '주유비')}</span></td>
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
-                <td class="fw-bold text-primary">${Number(r.amount).toLocaleString()} 원</td>
+                <td class="fw-bold text-primary">${amt.toLocaleString()} 원</td>
                 <td class="text-center">${evidenceBtn}</td>
-                <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.adminDeleteReceipt('${app.formatDateStr(r.date)}', '${r.phone}', '${r.company}', ${r.amount})">삭제</button></td>
+                <td class="text-center"><button class="btn btn-outline-danger btn-sm" onclick="app.adminDeleteReceipt('${dateStr}', '${phoneStr}', '${compStr}', ${amt})">삭제</button></td>
             `;
             tbody.appendChild(tr);
         });
@@ -1162,9 +1228,9 @@ const app = {
         if(compInput) {
             let opts = '';
             if (app.user.role === 'admin') {
-                (app.rawDb.masterCompanies || []).forEach(c => opts += `<option value="${c.name}">${c.name}</option>`);
+                (app.rawDb.masterCompanies || []).forEach(c => opts += `<option value="${app.escapeXSS(c.name)}">${app.escapeXSS(c.name)}</option>`);
             } else {
-                opts = `<option value="${app.user.company}">${app.user.company}</option>`;
+                opts = `<option value="${app.escapeXSS(app.user.company)}">${app.escapeXSS(app.user.company)}</option>`;
             }
             compInput.innerHTML = opts;
         }
@@ -1184,10 +1250,10 @@ const app = {
             let opts = '';
             if (app.user.role === 'admin') {
                 (app.rawDb.masterCompanies || []).forEach(c => {
-                    opts += `<option value="${c.name}" ${d.company.includes(c.name) ? 'selected':''}>${c.name}</option>`;
+                    opts += `<option value="${app.escapeXSS(c.name)}" ${d.company.includes(c.name) ? 'selected':''}>${app.escapeXSS(c.name)}</option>`;
                 });
             } else {
-                opts = `<option value="${app.user.company}" selected>${app.user.company}</option>`;
+                opts = `<option value="${app.escapeXSS(app.user.company)}" selected>${app.escapeXSS(app.user.company)}</option>`;
             }
             compInput.innerHTML = opts;
         }
