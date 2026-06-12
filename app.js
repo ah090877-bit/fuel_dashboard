@@ -112,7 +112,7 @@ const app = {
     escapeXSS: (str) => {
         if (!str) return '';
         return String(str).replace(/[&<>"']/g, (m) => { 
-            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' }; 
+            const map = { '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }; 
             return map[m]; 
         });
     },
@@ -351,6 +351,7 @@ const app = {
         });
     },
 
+    // ⭐️ 기사용 GPS 내역표 렌더러 (관리 탭(삭제 버튼) 추가 및 재렌더링 시 자동 회차 정렬 적용)
     renderDriverLocations: () => {
         const selectedDate = document.getElementById('driverLocationDateFilter').value;
         const locations = app.user.driverRecords?.locations || [];
@@ -364,7 +365,7 @@ const app = {
         document.getElementById('txtDriverLocCount').innerText = validLocs.length;
 
         if(validLocs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small py-3">해당 날짜의 도착 인증 기록이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted small py-3">해당 날짜의 도착 인증 기록이 없습니다.</td></tr>';
             return;
         }
 
@@ -378,9 +379,25 @@ const app = {
                 <td class="small">${l.timestamp.substring(11, 16)}</td>
                 <td class="fw-bold text-dark small">${app.escapeXSS(l.company)} <span class="badge bg-light text-dark border py-0 px-1 font-monospace">${countMap[l.company]}회차</span></td>
                 <td class="small text-muted text-wrap" style="max-width:180px;">${app.escapeXSS(l.address)}</td>
+                <td class="text-center"><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="app.deleteMyLocation('${l.timestamp}', '${app.escapeXSS(l.company)}')">삭제</button></td>
             `;
             tbody.prepend(tr); 
         });
+    },
+
+    // ⭐️ 기사용 GPS 삭제 함수 (삭제 시 자동으로 남은 기록의 회차를 계산하여 앞당김)
+    deleteMyLocation: async (timestamp, company) => {
+        if(!confirm(`해당 목적지 도착 기록을 삭제하시겠습니까?\n삭제 시 이후 방문 회차가 자동으로 앞당겨집니다.`)) return;
+        app.showLoading(true);
+        const res = await app.fetchAPI({ action: 'deleteLocation', timestamp: timestamp, phone: app.user.phone, company: company });
+        if(res) {
+            const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
+            app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
+            app.renderDriverLocations(); 
+            // 삭제 시 메인 탭에 있는 표의 뱃지 갯수에도 반영해야 하므로 데일리 검색 새로고침
+            app.renderDriverRecords();
+        }
+        app.showLoading(false);
     },
 
     cancelDriverEdit: () => {
@@ -996,7 +1013,7 @@ const app = {
         });
     },
 
-    // ⭐️ [버그 완전 해결] 구글 맵의 연속 경로(선)를 그리기 위한 URL 정밀 세팅 로직
+    // ⭐️ 오류 수정: 구글 길찾기 URL 공식 포맷으로 완벽 조립 ('/dir/A/B/C' 방식 적용)
     openRouteModal: (dateStr, phone, company, name) => {
         const locs = (app.rawDb.locations || []).filter(l =>
             app.formatDateStr(l.date) === dateStr &&
@@ -1017,7 +1034,7 @@ const app = {
 
         document.getElementById('btnOpenGoogleMap').classList.remove('d-none');
 
-        // ⭐️ 정밀 수정: 배열에 있는 좌표들을 '/'로 엮어 구글 맵 공식 길찾기(Directions) 연동 형식으로 변환
+        // 구글 맵 길찾기(Directions)를 강제하는 URL 포맷 세팅
         const pathCoords = locs.map(l => `${l.lat},${l.lng}`).join('/');
         const dirUrl = `https://www.google.com/maps/dir/${pathCoords}`;
 
@@ -1036,11 +1053,11 @@ const app = {
             `;
         });
 
-        // 수정한 완벽한 경로 추적 URL을 지도 버튼에 탑재
         document.getElementById('btnOpenGoogleMap').href = dirUrl;
         new bootstrap.Modal(document.getElementById('mdlRouteMap')).show();
     },
 
+    // ⭐️ 관리자용 동선 삭제 및 조회 회차 자동정렬 로직 완벽 연동
     applyLocationSearch: () => {
         const fDate = document.getElementById('searchLocationDate').value; 
         const fCompany = document.getElementById('searchLocationCompany')?.value || 'ALL'; 
@@ -1054,26 +1071,43 @@ const app = {
             if (fDate && r.date !== fDate) return false;
             if (fKeyword && !String(r.name).toLowerCase().includes(fKeyword)) return false;
             return true;
-        }).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        }).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        const countMap = {};
+        app.filteredLocations.forEach(l => {
+            const key = l.phone + '_' + l.company;
+            if(!countMap[key]) countMap[key] = 0;
+            countMap[key]++;
+            l.visitOrder = countMap[key];
+        });
+
+        app.filteredLocations.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
 
         tbody.innerHTML = '';
         if(app.filteredLocations.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">해당 날짜에 전송된 위치 기록이 없습니다.</td></tr>'; return; }
 
-        const visits = {};
         app.filteredLocations.forEach(r => {
-            if(!visits[r.phone]) visits[r.phone] = 0;
-            visits[r.phone]++;
-            
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${r.timestamp.substring(11, 19)}</td> 
-                <td class="fw-bold">${app.escapeXSS(r.name)} <span class="badge bg-light text-dark ms-1">${visits[r.phone]}회차</span></td>
+                <td class="fw-bold">${app.escapeXSS(r.name)} <span class="badge bg-light text-dark ms-1">${r.visitOrder}회차</span></td>
                 <td><span class="badge bg-secondary rounded-pill px-2">${app.escapeXSS(r.company)}</span></td>
                 <td class="text-dark small fw-bold">${app.escapeXSS(r.address)}</td>
-                <td class="text-center"><a href="${r.map_url}" target="_blank" class="btn btn-sm btn-outline-danger px-3 rounded-pill"><i class="bi bi-geo-alt-fill"></i> 구글 맵</a></td>
+                <td class="text-center">
+                    <a href="${r.map_url}" target="_blank" class="btn btn-sm btn-outline-primary px-2 rounded-pill me-1"><i class="bi bi-map-fill"></i> 지도</a>
+                    <button class="btn btn-sm btn-outline-danger px-2 rounded-pill" onclick="app.adminDeleteLocation('${r.timestamp}', '${r.phone}', '${r.company}')">삭제</button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
+    },
+
+    // ⭐️ 신규: 관리자용 GPS 삭제 함수
+    adminDeleteLocation: async (timestamp, phone, company) => {
+        if(!confirm(`해당 위치 기록을 삭제하시겠습니까?`)) return;
+        app.showLoading(true); 
+        await app.fetchAPI({ action: 'deleteLocation', timestamp: timestamp, phone: phone, company: company });
+        app.loadAdminDashboardData();
     },
 
     applyReceiptSearch: () => {
