@@ -109,10 +109,17 @@ const app = {
         if (loader) show ? loader.classList.remove('d-none') : loader.classList.add('d-none');
     },
 
+    // ⭐️ 문제의 주범인 따옴표 문법 오류를 완벽하게 해결했습니다.
     escapeXSS: (str) => {
         if (!str) return '';
         return String(str).replace(/[&<>"']/g, (m) => { 
-            const map = { '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }; 
+            const map = { 
+                '&': '&amp;', 
+                '<': '&lt;', 
+                '>': '&gt;', 
+                '"': '&quot;', 
+                "'": '&#39;' 
+            }; 
             return map[m]; 
         });
     },
@@ -351,7 +358,6 @@ const app = {
         });
     },
 
-    // ⭐️ 기사용 GPS 내역표 렌더러 (관리 탭(삭제 버튼) 추가 및 재렌더링 시 자동 회차 정렬 적용)
     renderDriverLocations: () => {
         const selectedDate = document.getElementById('driverLocationDateFilter').value;
         const locations = app.user.driverRecords?.locations || [];
@@ -385,7 +391,6 @@ const app = {
         });
     },
 
-    // ⭐️ 기사용 GPS 삭제 함수 (삭제 시 자동으로 남은 기록의 회차를 계산하여 앞당김)
     deleteMyLocation: async (timestamp, company) => {
         if(!confirm(`해당 목적지 도착 기록을 삭제하시겠습니까?\n삭제 시 이후 방문 회차가 자동으로 앞당겨집니다.`)) return;
         app.showLoading(true);
@@ -394,7 +399,6 @@ const app = {
             const updated = await app.fetchAPI({ action: 'getDriverData', phone: app.user.phone });
             app.user.driverRecords = updated; localStorage.setItem('fuelUser', JSON.stringify(app.user));
             app.renderDriverLocations(); 
-            // 삭제 시 메인 탭에 있는 표의 뱃지 갯수에도 반영해야 하므로 데일리 검색 새로고침
             app.renderDriverRecords();
         }
         app.showLoading(false);
@@ -1013,7 +1017,6 @@ const app = {
         });
     },
 
-    // ⭐️ 오류 수정: 구글 길찾기 URL 공식 포맷으로 완벽 조립 ('/dir/A/B/C' 방식 적용)
     openRouteModal: (dateStr, phone, company, name) => {
         const locs = (app.rawDb.locations || []).filter(l =>
             app.formatDateStr(l.date) === dateStr &&
@@ -1034,7 +1037,6 @@ const app = {
 
         document.getElementById('btnOpenGoogleMap').classList.remove('d-none');
 
-        // 구글 맵 길찾기(Directions)를 강제하는 URL 포맷 세팅
         const pathCoords = locs.map(l => `${l.lat},${l.lng}`).join('/');
         const dirUrl = `https://www.google.com/maps/dir/${pathCoords}`;
 
@@ -1057,7 +1059,6 @@ const app = {
         new bootstrap.Modal(document.getElementById('mdlRouteMap')).show();
     },
 
-    // ⭐️ 관리자용 동선 삭제 및 조회 회차 자동정렬 로직 완벽 연동
     applyLocationSearch: () => {
         const fDate = document.getElementById('searchLocationDate').value; 
         const fCompany = document.getElementById('searchLocationCompany')?.value || 'ALL'; 
@@ -1102,7 +1103,6 @@ const app = {
         });
     },
 
-    // ⭐️ 신규: 관리자용 GPS 삭제 함수
     adminDeleteLocation: async (timestamp, phone, company) => {
         if(!confirm(`해당 위치 기록을 삭제하시겠습니까?`)) return;
         app.showLoading(true); 
